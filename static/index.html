@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Voice-Assistant with OpenAI</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; padding: 20px; line-height: 1.4; }
+    button { padding: 10px 16px; font-size: 16px; margin-right: 8px; }
+    #status { margin-top: 10px; white-space: pre-wrap; }
+    .muted { color: #666; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h2>Voice to Voice Assistant</h2>
+  <p class="muted">Records mic → POST <code>/chat</code> → plays MP3. No calls to <code>/v1/*</code>.</p>
+
+  <button id="record">Start Recording</button>
+  <button id="stop" disabled>Stop</button>
+  <div id="status"></div>
+  <audio id="response-audio" controls></audio>
+
+  <script>
+    // --- Guard: scream if anything tries to call /v1/* from this page ---
+    const _origFetch = window.fetch;
+    window.fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url && url.startsWith('/v1/')) {
+        console.error('Blocked a /v1/* call from this page:', url);
+        throw new Error('This page must not call ' + url);
+      }
+      return _origFetch(input, init);
+    };
+
+    let recorder, audioStream;
+    let chunks = [];
+    const recordBtn = document.getElementById('record');
+    const stopBtn = document.getElementById('stop');
+    const statusDiv = document.getElementById('status');
+    const responseAudio = document.getElementById('response-audio');
+
+    function setStatus(msg) {
+      statusDiv.textContent = msg;
+      console.log(msg);
+    }
+
+    async function getRecorder() {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('getUserMedia not supported in this browser.');
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Prefer an explicit mime type if supported
+      const preferred = 'audio/webm;codecs=opus';
+      const type = MediaRecorder.isTypeSupported?.(preferred) ? preferred : 'audio/webm';
+      const rec = new MediaRecorder(stream, { mimeType: type });
+
+      return { rec, stream, type };
+    }
+
+    recordBtn.onclick = async () => {
+      try {
+        const { rec, stream, type } = await getRecorder();
+        recorder = rec;
+        audioStream = stream;
+        chunks = [];
+        setStatus('Recording... click "Stop" when done.\nFormat: ' + type);
+
+        recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+        recorder.onstop = async () => {
+          try {
+            setStatus('Processing...');
+            const blob = new Blob(chunks, { type });
+            chunks = [];
+
+            const form = new FormData();
+            // Backend accepts webm/opus just fine; filename helps model inference.
+            form.append('file', blob, 'input.webm');
+
+            const res = await fetch('/chat', { method: 'POST', body: form });
+
+            if (!res.ok) {
+              // Try to read error detail from FastAPI
+              let detail = '';
+              try { detail = await res.text(); } catch {}
+              throw new Error('Server error ' + res.status + (detail ? (': ' + detail) : ''));
+            }
+
+            const buf = await res.arrayBuffer();   // streaming → full blob is fine for now
+            const outBlob = new Blob([buf], { type: 'audio/mpeg' });
+            const url = URL.createObjectURL(outBlob);
+
+            responseAudio.src = url;
+            await responseAudio.play().catch(() => {/* autoplay may be blocked */});
+            setStatus('Response ready!');
+
+          } catch (err) {
+            console.error(err);
+            setStatus('Error: ' + err.message);
+          }
+        };
+
+        recorder.start(); // start chunks
+        recordBtn.disabled = true;
+        stopBtn.disabled = false;
+
+      } catch (err) {
+        console.error(err);
+        setStatus('Mic error: ' + err.message);
+      }
+    };
+
+    stopBtn.onclick = () => {
+      try {
+        if (recorder && recorder.state !== 'inactive') {
+          recorder.stop();
+        }
+        if (audioStream) {
+          audioStream.getTracks().forEach(t => t.stop());
+        }
+      } finally {
+        recordBtn.disabled = false;
+        stopBtn.disabled = true;
+      }
+    };
+  </script>
+</body>
+</html>
