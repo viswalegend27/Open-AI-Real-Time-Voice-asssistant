@@ -7,3 +7,5 @@ aiortc
 aiohttp
 numpy
 soundfile
+scipy
+resampy

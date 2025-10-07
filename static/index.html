@@ -1,240 +1,314 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Voice-Assistant with OpenAI</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; padding: 20px; line-height: 1.4; }
-    button { padding: 10px 16px; font-size: 16px; margin-right: 8px; }
-    #status { margin-top: 10px; white-space: pre-wrap; }
-    .muted { color: #666; font-size: 14px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Assistant</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .status {
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            min-height: 100px;
+        }
+        .status-text {
+            color: #4a5568;
+            line-height: 1.6;
+        }
+        .transcript {
+            background: #e6fffa;
+            border-left: 4px solid #38b2ac;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .response {
+            background: #f0fff4;
+            border-left: 4px solid #48bb78;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .error {
+            background: #fff5f5;
+            border-left: 4px solid #f56565;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            color: #c53030;
+        }
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+        button:hover:not(:disabled) {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+        }
+        .recording {
+            background: #f56565 !important;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .instructions {
+            background: #edf2f7;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #4a5568;
+        }
+        .instructions h3 {
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        .instructions ul {
+            margin-left: 20px;
+        }
+        .instructions li {
+            margin: 5px 0;
+        }
+    </style>
 </head>
 <body>
-  <h2>Voice to Voice Assistant</h2>
-  <p class="muted">Records mic → POST <code>/chat</code> → plays MP3. No calls to <code>/v1/*</code>.</p>
-
-  <button id="record">Start Recording</button>
-  <button id="stop" disabled>Stop</button>
-  <div id="status"></div>
-  <audio id="response-audio" controls></audio>
-
-  <hr />
-  <h3>Live Stream via WebRTC (Experimental)</h3>
-  <button id="live-start">Start Live WebRTC</button>
-  <button id="live-stop" disabled>Stop Live</button>
-  <div id="live-status" class="muted"></div>
-
-  <script>
-    // --- Guard: scream if anything tries to call /v1/* from this page ---
-    const _origFetch = window.fetch;
-    window.fetch = async (input, init) => {
-      const url = typeof input === 'string' ? input : input.url;
-      if (url && url.startsWith('/v1/')) {
-        console.error('Blocked a /v1/* call from this page:', url);
-        throw new Error('This page must not call ' + url);
-      }
-      return _origFetch(input, init);
-    };
-
-    let recorder, audioStream;
-    let chunks = [];
-    const recordBtn = document.getElementById('record');
-    const stopBtn = document.getElementById('stop');
-    const statusDiv = document.getElementById('status');
-    const responseAudio = document.getElementById('response-audio');
-
-    function setStatus(msg) {
-      statusDiv.textContent = msg;
-      console.log(msg);
-    }
-
-    async function getRecorder() {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error('getUserMedia not supported in this browser.');
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      // Prefer an explicit mime type if supported
-      const preferred = 'audio/webm;codecs=opus';
-      const type = MediaRecorder.isTypeSupported?.(preferred) ? preferred : 'audio/webm';
-      const rec = new MediaRecorder(stream, { mimeType: type });
-
-      return { rec, stream, type };
-    }
-
-    recordBtn.onclick = async () => {
-      try {
-        const { rec, stream, type } = await getRecorder();
-        recorder = rec;
-        audioStream = stream;
-        chunks = [];
-        setStatus('Recording... click "Stop" when done.\nFormat: ' + type);
-
-        recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-        recorder.onstop = async () => {
-          try {
-            setStatus('Processing...');
-            const blob = new Blob(chunks, { type }); // collected data is stored as webm/opus format
-            chunks = [];
-
-            const form = new FormData();
-            // Backend accepts webm/opus just fine; filename helps model inference.
-            // Appended as a form data
-            form.append('file', blob, 'input.webm');
-
-            const res = await fetch('/chat', { method: 'POST', body: form });
-
-            if (!res.ok) {
-              // Try to read error detail from FastAPI
-              let detail = '';
-              try { detail = await res.text(); } catch {}
-              throw new Error('Server error ' + res.status + (detail ? (': ' + detail) : ''));
+    <div class="container">
+        <h1>🎤 Voice Assistant</h1>
+        <p class="subtitle">Powered by OpenAI - Simple & Reliable</p>
+        
+        <div class="status">
+            <div class="status-text" id="status">
+                Click "Start Recording" to begin speaking to your assistant
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="startBtn">Start Recording</button>
+            <button id="stopBtn" disabled>Stop Recording</button>
+        </div>
+        
+        <div class="instructions">
+            <h3>📋 How to Use:</h3>
+            <ul>
+                <li>Click <strong>"Start Recording"</strong></li>
+                <li>Speak clearly for at least 2 seconds</li>
+                <li>Click <strong>"Stop Recording"</strong> when done</li>
+                <li>Wait for the AI response!</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const statusDiv = document.getElementById('status');
+        
+        let ws = null;
+        let mediaRecorder = null;
+        let audioContext = null;
+        let audioChunks = [];
+        
+        function setStatus(html, type = 'info') {
+            const className = type === 'error' ? 'error' : type === 'transcript' ? 'transcript' : type === 'response' ? 'response' : '';
+            const div = document.createElement('div');
+            div.className = className;
+            div.innerHTML = html;
+            statusDiv.appendChild(div);
+            statusDiv.scrollTop = statusDiv.scrollHeight;
+        }
+        
+        function clearStatus() {
+            statusDiv.innerHTML = 'Ready to record...';
+        }
+        
+        startBtn.onclick = async () => {
+            try {
+                clearStatus();
+                setStatus('🔌 Connecting to server...');
+                
+                // Connect WebSocket
+                ws = new WebSocket(`ws://${window.location.host}/ws/voice`);
+                
+                ws.onopen = async () => {
+                    setStatus('✅ Connected! Starting microphone...');
+                    
+                    // Get microphone access
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true,
+                            channelCount: 1,
+                            sampleRate: 16000
+                        }
+                    });
+                    
+                    // Create AudioContext for processing
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                    const source = audioContext.createMediaStreamSource(stream);
+                    const processor = audioContext.createScriptProcessor(4096, 1, 1);
+                    
+                    source.connect(processor);
+                    processor.connect(audioContext.destination);
+                    
+                    audioChunks = [];
+                    
+                    processor.onaudioprocess = (e) => {
+                        // Get audio data as Float32
+                        const inputData = e.inputBuffer.getChannelData(0);
+                        // Convert to Int16 for transmission
+                        const int16Data = new Int16Array(inputData.length);
+                        for (let i = 0; i < inputData.length; i++) {
+                            const s = Math.max(-1, Math.min(1, inputData[i]));
+                            int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                        }
+                        audioChunks.push(int16Data);
+                        
+                        // Send chunk to server
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            const base64 = btoa(String.fromCharCode.apply(null, new Uint8Array(int16Data.buffer)));
+                            ws.send(JSON.stringify({
+                                type: 'audio_chunk',
+                                data: base64
+                            }));
+                        }
+                    };
+                    
+                    // Store for cleanup
+                    window.currentStream = stream;
+                    window.currentProcessor = processor;
+                    
+                    setStatus('🎙️ <strong>Recording... Speak now!</strong>');
+                    startBtn.disabled = true;
+                    stopBtn.disabled = false;
+                    startBtn.classList.remove('recording');
+                    stopBtn.classList.add('recording');
+                };
+                
+                ws.onmessage = (event) => {
+                    const msg = JSON.parse(event.data);
+                    
+                    if (msg.type === 'transcript') {
+                        setStatus(`<strong>You said:</strong> "${msg.text}"`, 'transcript');
+                        setStatus('🤖 AI is thinking...');
+                    }
+                    else if (msg.type === 'audio') {
+                        setStatus(`<strong>AI replied:</strong> ${msg.text}`, 'response');
+                        
+                        // Play audio response
+                        const audioData = atob(msg.data);
+                        const audioArray = new Uint8Array(audioData.length);
+                        for (let i = 0; i < audioData.length; i++) {
+                            audioArray[i] = audioData.charCodeAt(i);
+                        }
+                        const blob = new Blob([audioArray], { type: 'audio/mpeg' });
+                        const url = URL.createObjectURL(blob);
+                        const audio = new Audio(url);
+                        audio.play();
+                        
+                        setStatus('✅ Ready for next question!');
+                    }
+                    else if (msg.type === 'error') {
+                        setStatus(`⚠️ ${msg.message}`, 'error');
+                    }
+                };
+                
+                ws.onerror = (error) => {
+                    setStatus('❌ Connection error. Please refresh and try again.', 'error');
+                    cleanup();
+                };
+                
+                ws.onclose = () => {
+                    console.log('WebSocket closed');
+                    cleanup();
+                };
+                
+            } catch (err) {
+                setStatus(`❌ Error: ${err.message}`, 'error');
+                console.error(err);
+                cleanup();
             }
-
-            const buf = await res.arrayBuffer();   // streaming → full blob is fine for now
-            const outBlob = new Blob([buf], { type: 'audio/mpeg' });
-            const url = URL.createObjectURL(outBlob);
-
-            responseAudio.src = url;
-            await responseAudio.play().catch(() => {/* autoplay may be blocked */});
-            setStatus('Response ready!');
-
-          } catch (err) {
-            console.error(err);
-            setStatus('Error: ' + err.message);
-          }
         };
-
-        recorder.start(); // start chunks
-        recordBtn.disabled = true;
-        stopBtn.disabled = false;
-
-      } catch (err) {
-        console.error(err);
-        setStatus('Mic error: ' + err.message);
-      }
-    };
-
-    stopBtn.onclick = () => {
-      try {
-        if (recorder && recorder.state !== 'inactive') {
-          recorder.stop();
+        
+        stopBtn.onclick = () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                setStatus('⏹️ Stopping... Processing your audio...');
+                ws.send(JSON.stringify({ type: 'audio_end' }));
+            }
+            cleanup();
+        };
+        
+        function cleanup() {
+            if (window.currentProcessor) {
+                window.currentProcessor.disconnect();
+                window.currentProcessor = null;
+            }
+            if (window.currentStream) {
+                window.currentStream.getTracks().forEach(track => track.stop());
+                window.currentStream = null;
+            }
+            if (audioContext && audioContext.state !== 'closed') {
+                audioContext.close();
+                audioContext = null;
+            }
+            
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            startBtn.classList.remove('recording');
+            stopBtn.classList.remove('recording');
         }
-        if (audioStream) {
-          audioStream.getTracks().forEach(t => t.stop());
-        }
-      } finally {
-        recordBtn.disabled = false;
-        stopBtn.disabled = true;
-      }
-    };
-  // WebRTC Live Audio Section
-  const liveStart = document.getElementById('live-start');
-  const liveStop = document.getElementById('live-stop');
-  const liveStatus = document.getElementById('live-status');
-  let liveStream = null;
-  let pc = null;
-  let ws = null;
-
-  function setLiveStatus(msg) {
-    liveStatus.textContent = msg;
-    console.log('[LIVE]', msg);
-  }
-  // Websocket is opened when clicked Start live web RTC
-  liveStart.onclick = async () => {
-    try {
-      // Peer connection var is set
-      pc = new RTCPeerConnection();
-      ws = new WebSocket(
-        (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'
-      );
-      setLiveStatus('Connecting WebSocket for signaling…');
-      await new Promise((resolve, reject) => {
-        ws.onopen = resolve;
-        ws.onerror = () => reject(new Error('WebSocket failed to open'));
-      });
-
-      setLiveStatus('Getting microphone…');
-      // The microphone access is requested
-      liveStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Getting audio tracks
-      liveStream.getTracks().forEach(track => pc.addTrack(track, liveStream));
-
-      pc.onicecandidate = (ev) => {
-        if (ev.candidate && ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'candidate', candidate: ev.candidate }));
-        }
-      };
-      // Listen for any messages
-      ws.onmessage = async (event) => {
-        let audioBlob = null;
-        // Try to handle binary audio data in the most robust way
-        if (event.data instanceof Blob) {
-          audioBlob = event.data;
-        } else if (event.data instanceof ArrayBuffer) {
-          audioBlob = new Blob([event.data], { type: 'audio/mpeg' });
-        } else if (event.data && event.data.arrayBuffer) {
-          // For some browsers, event.data may look like a Blob but not evaluate instanceof
-          try {
-            const buffer = await event.data.arrayBuffer();
-            audioBlob = new Blob([buffer], { type: 'audio/mpeg' });
-          } catch {}
-        }
-
-        if (audioBlob) {
-          setLiveStatus('Received reply audio, playing…');
-          const url = URL.createObjectURL(audioBlob);
-          const responseAudio = new Audio(url);
-          responseAudio.play();
-          responseAudio.onended = () => {
-            setLiveStatus('Reply finished. Keep speaking or stop the live session.');
-          };
-          return;
-        }
-        // Otherwise it's text: handle transcript or answer
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'answer') {
-            await pc.setRemoteDescription(new RTCSessionDescription(msg));
-            setLiveStatus('WebRTC connection established! Streaming mic audio.');
-          } else if (msg.transcript) {
-            setLiveStatus('You said: ' + msg.transcript + '\nAwaiting voice reply…');
-          }
-        } catch (e) {
-          setLiveStatus('Received unknown message: ' + event.data);
-        }
-      };
-
-      setLiveStatus('Negotiating WebRTC…');
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      ws.send(JSON.stringify({ type: 'offer', sdp: offer.sdp }));
-
-      liveStart.disabled = true;
-      liveStop.disabled = false;
-
-    } catch (err) {
-      setLiveStatus('WebRTC error: ' + err.message);
-      if (ws) ws.close();
-      if (pc) pc.close();
-      liveStart.disabled = false;
-      liveStop.disabled = true;
-    }
-  };
-
-  liveStop.onclick = () => {
-    if (ws) try { ws.close(); } catch {}
-    if (pc) try { pc.close(); } catch {}
-    if (liveStream) {
-      liveStream.getTracks().forEach(t => t.stop());
-    }
-    setLiveStatus('Stopped.');
-    liveStart.disabled = false;
-    liveStop.disabled = true;
-  };
-
-  </script>
+    </script>
 </body>
 </html>
