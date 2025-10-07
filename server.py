@@ -60,19 +60,22 @@ def read_index():
     return PlainTextResponse("Place index.html in ./static/index.html", status_code=200)
 
 # ==== Voice Chat ====
+# Uploaded audio file is Read
 @app.post("/chat")
 async def chat_voice(file: UploadFile = File(...)):
     try:
         audio_bytes = await file.read()
         if not audio_bytes:
+            # Backend reads the raw bytes
             raise HTTPException(status_code=400, detail="Empty file")
 
-        # Transcription - pass file as tuple (filename, file_object, content_type)
+        # Transcription - Process
         filename = file.filename or "input.webm"
         audio_file = (filename, io.BytesIO(audio_bytes), file.content_type or "audio/webm")
         
         try:
             transcript = client.audio.transcriptions.create(
+                # Model used for Transcription
                 model="gpt-4o-transcribe",
                 file=audio_file,
             )
@@ -81,11 +84,13 @@ async def chat_voice(file: UploadFile = File(...)):
             # Reset BytesIO for retry
             audio_file = (filename, io.BytesIO(audio_bytes), file.content_type or "audio/webm")
             transcript = client.audio.transcriptions.create(
+                # If failure occurs in our model then we are 
                 model="whisper-1",
                 file=audio_file,
             )
 
         text = transcript.text or ""
+        # Transcribed text is displayed in our terminal
         print(f"Transcribed: {text}")
 
         # Chat
@@ -96,16 +101,17 @@ async def chat_voice(file: UploadFile = File(...)):
                 {"role": "user", "content": text},
             ],
         )
+        # Reply text is stored inside reply variable
         reply = chat.choices[0].message.content
         print(f"Reply: {reply}")
 
         # TTS streaming (MP3)
         def tts_stream():
             with client.audio.speech.with_streaming_response.create(
-                model="tts-1",  # or tts-1-hd
+                model="tts-1",  # openAI's tts model
                 voice="alloy",
                 input=reply,
-                response_format="mp3",
+                response_format="mp3", # Synthesize the reply into MP3
             ) as resp:
                 for chunk in resp.iter_bytes():
                     yield chunk
@@ -120,12 +126,12 @@ async def chat_voice(file: UploadFile = File(...)):
 
 
 # ==== NEW: WebRTC signaling and audio receiver ====
-class AudioReceiver(MediaStreamTrack):
+class AudioReceiver(MediaStreamTrack): # Class to handle our WebRTC audio
     kind = "audio"
     def __init__(self, track, on_complete):
         super().__init__()
         self.track = track
-        self.buffers = []  # Stores numpy arrays
+        self.buffers = []  # Stores numpy arrays of raw audio data
         self.on_complete = on_complete
         self.closed = False
 
@@ -133,7 +139,7 @@ class AudioReceiver(MediaStreamTrack):
         frame = await self.track.recv()
         # aiortc frame is 16-bit PCM, samples per channel
         pcm = frame.to_ndarray()
-        self.buffers.append(pcm.copy())
+        self.buffers.append(pcm.copy()) # add every frame to the buffer
         print(f"[WebRTC] Received frame ({pcm.shape})")
         return frame
 
@@ -141,6 +147,7 @@ class AudioReceiver(MediaStreamTrack):
         if self.closed or not self.buffers:
             return
         self.closed = True
+        # Merge all frames into one array
         audio_data = np.concatenate(self.buffers, axis=1) if len(self.buffers) else None
         # Mono or stereo: always write as 16-bit little-endian WAV for OpenAI
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp:
@@ -162,12 +169,13 @@ class AudioReceiver(MediaStreamTrack):
                 print(f"[WebRTC] Transcription error: {e}")
 
 
-@app.websocket("/ws")
+@app.websocket("/ws") # Web RTC used is Fast API's route /ws 
+                      # Uses aiortc's for handling connections and recieving data
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    pc = RTCPeerConnection()
+    pc = RTCPeerConnection()  # Our new aiortc connection
     audio_receiver = None
-
+    # Function used for audio transcription
     async def handle_complete(text):
         # Respond with the transcribed text and also with audio reply
         try:
@@ -199,6 +207,7 @@ async def websocket_endpoint(websocket: WebSocket):
             print(f"[WebRTC] Chat or TTS error: {e}")
 
     try:
+        # Connecting incoming audio track 
         @pc.on("track")
         def on_track(track):
             nonlocal audio_receiver
@@ -213,6 +222,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     if audio_receiver:
                         await audio_receiver.stop_and_process()
 
+        # Needs debugging and further processing
         while True:
             # Support both text and bytes (ignore bytes unless they're browser pings)
             data = await websocket.receive()
