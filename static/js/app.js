@@ -13,6 +13,8 @@ const aiAudioEl = document.getElementById('aiAudio');
 let peerConnection = null;
 let dataChannel = null;
 let audioStream = null;
+let currentAIResponse = '';
+let isStreaming = false;
 
 // ==========================================
 // Status Update
@@ -54,6 +56,31 @@ function updateAITranscript(text) {
         aiTranscriptEl.textContent = '';
     }
     aiTranscriptEl.textContent += text + '\n';
+    aiTranscriptEl.scrollTop = aiTranscriptEl.scrollHeight;
+}
+
+function updateStreamingAITranscript(text) {
+    // Update only the currently streaming response
+    if (aiTranscriptEl.classList.contains('empty')) {
+        aiTranscriptEl.classList.remove('empty');
+        aiTranscriptEl.textContent = '';
+    }
+    
+    const lines = aiTranscriptEl.textContent.split('\n');
+    
+    // If we're streaming, replace the last line; otherwise append new line
+    if (isStreaming && lines.length > 0 && lines[lines.length - 1].startsWith('Ishmael:')) {
+        lines[lines.length - 1] = text;
+    } else {
+        // Append as new line
+        if (aiTranscriptEl.textContent && !aiTranscriptEl.textContent.endsWith('\n')) {
+            lines.push(text);
+        } else {
+            lines[lines.length - 1] = text;
+        }
+    }
+    
+    aiTranscriptEl.textContent = lines.join('\n');
     aiTranscriptEl.scrollTop = aiTranscriptEl.scrollHeight;
 }
 
@@ -201,16 +228,42 @@ function handleDataChannelMessage(msg) {
         updateUserTranscript(`You: ${transcript}`);
     }
 
-    // AI response text
-    if (type === 'response.audio_transcript.done') {
-        const transcript = msg.transcript || '';
-        updateAITranscript(`Ishmael: ${transcript}`);
+    // AI response started - clear previous response buffer and mark as streaming
+    if (type === 'response.created') {
+        currentAIResponse = '';
+        isStreaming = true;
     }
 
-    // AI response text delta (streaming)
-    if (type === 'response.text.delta') {
-        const text = msg.delta || '';
-        updateAITranscript(text);
+    // AI audio transcript delta (streaming in real-time)
+    if (type === 'response.audio_transcript.delta') {
+        const delta = msg.delta || '';
+        currentAIResponse += delta;
+        
+        // Clear placeholder on first delta
+        if (aiTranscriptEl.classList.contains('empty')) {
+            aiTranscriptEl.classList.remove('empty');
+            aiTranscriptEl.textContent = '';
+        }
+        
+        // Update the current streaming line with accumulated response
+        updateStreamingAITranscript(`Ishmael: ${currentAIResponse}`);
+    }
+
+    // AI audio transcript complete - finalize and stop streaming mode
+    if (type === 'response.audio_transcript.done') {
+        const transcript = msg.transcript || currentAIResponse;
+        
+        // Finalize the transcript
+        if (transcript) {
+            updateStreamingAITranscript(`Ishmael: ${transcript}`);
+        }
+        
+        // Add newline to separate from next response
+        aiTranscriptEl.textContent += '\n';
+        
+        // Reset streaming state
+        currentAIResponse = '';
+        isStreaming = false;
     }
 
     // Session updates

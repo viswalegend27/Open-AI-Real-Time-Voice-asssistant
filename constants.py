@@ -139,8 +139,8 @@ Remember: You are {AI_AGENT_NAME} from Mahindra. Your goal is to help customers 
 VAD_CONFIG = {
     "type": "server_vad",
     "threshold": 0.5,
-    "prefix_padding_ms": 300,
-    "silence_duration_ms": 800
+    "prefix_padding_ms": 200,
+    "silence_duration_ms": 500
 }
 
 
