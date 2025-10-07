@@ -54,6 +54,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/")
 def read_index():
+    # Data is recieved via get method
     index_path = os.path.join(STATIC_DIR, "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path, media_type="text/html")
@@ -62,6 +63,7 @@ def read_index():
 # ==== Voice Chat ====
 # Uploaded audio file is Read
 @app.post("/chat")
+# Process the recorded file from the frontend
 async def chat_voice(file: UploadFile = File(...)):
     try:
         audio_bytes = await file.read()

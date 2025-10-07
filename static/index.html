@@ -76,11 +76,12 @@
         recorder.onstop = async () => {
           try {
             setStatus('Processing...');
-            const blob = new Blob(chunks, { type });
+            const blob = new Blob(chunks, { type }); // collected data is stored as webm/opus format
             chunks = [];
 
             const form = new FormData();
             // Backend accepts webm/opus just fine; filename helps model inference.
+            // Appended as a form data
             form.append('file', blob, 'input.webm');
 
             const res = await fetch('/chat', { method: 'POST', body: form });
