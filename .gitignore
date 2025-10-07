@@ -1,2 +1,5 @@
 .env
 notes.txt
+/static/index_old.html.bak
+server_old.py.bak
+webrtc_utils_old.py.bak
