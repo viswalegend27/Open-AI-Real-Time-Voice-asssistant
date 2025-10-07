@@ -20,6 +20,12 @@
   <div id="status"></div>
   <audio id="response-audio" controls></audio>
 
+  <hr />
+  <h3>Live Stream via WebRTC (Experimental)</h3>
+  <button id="live-start">Start Live WebRTC</button>
+  <button id="live-stop" disabled>Stop Live</button>
+  <div id="live-status" class="muted"></div>
+
   <script>
     // --- Guard: scream if anything tries to call /v1/* from this page ---
     const _origFetch = window.fetch;
@@ -123,6 +129,105 @@
         stopBtn.disabled = true;
       }
     };
+  // WebRTC Live Audio Section
+  const liveStart = document.getElementById('live-start');
+  const liveStop = document.getElementById('live-stop');
+  const liveStatus = document.getElementById('live-status');
+  let liveStream = null;
+  let pc = null;
+  let ws = null;
+
+  function setLiveStatus(msg) {
+    liveStatus.textContent = msg;
+    console.log('[LIVE]', msg);
+  }
+
+  liveStart.onclick = async () => {
+    try {
+      pc = new RTCPeerConnection();
+      ws = new WebSocket(
+        (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'
+      );
+      setLiveStatus('Connecting WebSocket for signaling…');
+      await new Promise((resolve, reject) => {
+        ws.onopen = resolve;
+        ws.onerror = () => reject(new Error('WebSocket failed to open'));
+      });
+
+      setLiveStatus('Getting microphone…');
+      liveStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      liveStream.getTracks().forEach(track => pc.addTrack(track, liveStream));
+
+      pc.onicecandidate = (ev) => {
+        if (ev.candidate && ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'candidate', candidate: ev.candidate }));
+        }
+      };
+
+      ws.onmessage = async (event) => {
+        let audioBlob = null;
+        // Try to handle binary audio data in the most robust way
+        if (event.data instanceof Blob) {
+          audioBlob = event.data;
+        } else if (event.data instanceof ArrayBuffer) {
+          audioBlob = new Blob([event.data], { type: 'audio/mpeg' });
+        } else if (event.data && event.data.arrayBuffer) {
+          // For some browsers, event.data may look like a Blob but not evaluate instanceof
+          try {
+            const buffer = await event.data.arrayBuffer();
+            audioBlob = new Blob([buffer], { type: 'audio/mpeg' });
+          } catch {}
+        }
+
+        if (audioBlob) {
+          setLiveStatus('Received reply audio, playing…');
+          const url = URL.createObjectURL(audioBlob);
+          const responseAudio = new Audio(url);
+          responseAudio.play();
+          return;
+        }
+        // Otherwise it's text: handle transcript or answer
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'answer') {
+            await pc.setRemoteDescription(new RTCSessionDescription(msg));
+            setLiveStatus('WebRTC connection established! Streaming mic audio.');
+          } else if (msg.transcript) {
+            setLiveStatus('You said: ' + msg.transcript + '\nAwaiting voice reply…');
+          }
+        } catch (e) {
+          setLiveStatus('Received unknown message: ' + event.data);
+        }
+      };
+
+      setLiveStatus('Negotiating WebRTC…');
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      ws.send(JSON.stringify({ type: 'offer', sdp: offer.sdp }));
+
+      liveStart.disabled = true;
+      liveStop.disabled = false;
+
+    } catch (err) {
+      setLiveStatus('WebRTC error: ' + err.message);
+      if (ws) ws.close();
+      if (pc) pc.close();
+      liveStart.disabled = false;
+      liveStop.disabled = true;
+    }
+  };
+
+  liveStop.onclick = () => {
+    if (ws) try { ws.close(); } catch {}
+    if (pc) try { pc.close(); } catch {}
+    if (liveStream) {
+      liveStream.getTracks().forEach(t => t.stop());
+    }
+    setLiveStatus('Stopped.');
+    liveStart.disabled = false;
+    liveStop.disabled = true;
+  };
+
   </script>
 </body>
 </html>

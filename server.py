@@ -7,6 +7,16 @@ from dotenv import load_dotenv
 import os
 import io
 
+# ==== WebRTC related import ====
+from aiortc import RTCPeerConnection, RTCSessionDescription, MediaStreamTrack
+import asyncio
+import json
+from fastapi import WebSocket, WebSocketDisconnect
+
+import numpy as np
+import soundfile as sf
+import tempfile
+
 # ==== Env & OpenAI ====
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
@@ -107,3 +117,125 @@ async def chat_voice(file: UploadFile = File(...)):
     except Exception as e:
         print(f"Error in chat_voice: {e}")
         raise HTTPException(status_code=500, detail=f"Server error: {e}")
+
+
+# ==== NEW: WebRTC signaling and audio receiver ====
+class AudioReceiver(MediaStreamTrack):
+    kind = "audio"
+    def __init__(self, track, on_complete):
+        super().__init__()
+        self.track = track
+        self.buffers = []  # Stores numpy arrays
+        self.on_complete = on_complete
+        self.closed = False
+
+    async def recv(self):
+        frame = await self.track.recv()
+        # aiortc frame is 16-bit PCM, samples per channel
+        pcm = frame.to_ndarray()
+        self.buffers.append(pcm.copy())
+        print(f"[WebRTC] Received frame ({pcm.shape})")
+        return frame
+
+    async def stop_and_process(self, sample_rate=48000):
+        if self.closed or not self.buffers:
+            return
+        self.closed = True
+        audio_data = np.concatenate(self.buffers, axis=1) if len(self.buffers) else None
+        # Mono or stereo: always write as 16-bit little-endian WAV for OpenAI
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp:
+            sf.write(tmp.name, audio_data.T, sample_rate, subtype='PCM_16')
+            tmp.flush()
+            tmp.seek(0)
+            # Prepare file for OpenAI (simulate UploadFile)
+            audio_file = ("input.wav", tmp, "audio/wav")
+            print("[WebRTC] Sending buffered audio to OpenAI...")
+            try:
+                transcript = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                )
+                text = transcript.text or ""
+                print(f"[WebRTC] Transcribed: {text}")
+                await self.on_complete(text)
+            except Exception as e:
+                print(f"[WebRTC] Transcription error: {e}")
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    pc = RTCPeerConnection()
+    audio_receiver = None
+
+    async def handle_complete(text):
+        # Respond with the transcribed text and also with audio reply
+        try:
+            await websocket.send_text(json.dumps({"transcript": text}))
+            # Get a chat reply
+            chat = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a helpful voice assistant."},
+                    {"role": "user", "content": text},
+                ],
+            )
+            reply = chat.choices[0].message.content
+            print(f"[WebRTC] Reply: {reply}")
+
+            # TTS (MP3) in memory
+            buf = bytearray()
+            with client.audio.speech.with_streaming_response.create(
+                model="tts-1",
+                voice="alloy",
+                input=reply,
+                response_format="mp3",
+            ) as resp:
+                for chunk in resp.iter_bytes():
+                    buf.extend(chunk)
+            # Send the MP3 audio as binary over WebSocket
+            await websocket.send_bytes(bytes(buf))
+        except Exception as e:
+            print(f"[WebRTC] Chat or TTS error: {e}")
+
+    try:
+        @pc.on("track")
+        def on_track(track):
+            nonlocal audio_receiver
+            if track.kind == "audio":
+                audio_receiver = AudioReceiver(track, handle_complete)
+                print("[WebRTC] Remote audio track received and buffering.")
+                
+                # Listen for the track ending and process audio immediately
+                @track.on("ended")
+                async def on_ended():
+                    print("[WebRTC] Audio track ended. Processing audio...")
+                    if audio_receiver:
+                        await audio_receiver.stop_and_process()
+
+        while True:
+            # Support both text and bytes (ignore bytes unless they're browser pings)
+            data = await websocket.receive()
+            msg = None
+            if data.get("type") == "websocket.receive":
+                raw = data.get("text")
+                if raw:
+                    msg = json.loads(raw)
+            if not msg:
+                continue
+            if msg["type"] == "offer":
+                offer = RTCSessionDescription(sdp=msg["sdp"], type=msg["type"])
+                await pc.setRemoteDescription(offer)
+                answer = await pc.createAnswer()
+                await pc.setLocalDescription(answer)
+                await websocket.send_text(json.dumps({
+                    "type": pc.localDescription.type,
+                    "sdp": pc.localDescription.sdp,
+                }))
+            elif msg["type"] == "candidate":
+                candidate = msg["candidate"]
+                await pc.addIceCandidate(candidate)
+    except WebSocketDisconnect:
+        if audio_receiver:
+            await audio_receiver.stop_and_process()
+        await pc.close()

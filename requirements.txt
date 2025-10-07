@@ -3,3 +3,7 @@ fastapi
 uvicorn[standard]
 openai
 python-dotenv
+aiortc
+aiohttp
+numpy
+soundfile
