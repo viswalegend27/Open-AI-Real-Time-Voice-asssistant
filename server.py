@@ -1,8 +1,3 @@
-"""
-Clean WebRTC Voice Assistant using OpenAI
-Simple, reliable real-time voice chat
-"""
-
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
