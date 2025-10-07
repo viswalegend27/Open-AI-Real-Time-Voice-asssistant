@@ -185,6 +185,9 @@
           const url = URL.createObjectURL(audioBlob);
           const responseAudio = new Audio(url);
           responseAudio.play();
+          responseAudio.onended = () => {
+            setLiveStatus('Reply finished. Keep speaking or stop the live session.');
+          };
           return;
         }
         // Otherwise it's text: handle transcript or answer

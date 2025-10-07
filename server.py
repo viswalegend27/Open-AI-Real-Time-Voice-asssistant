@@ -8,7 +8,7 @@ import os
 import io
 
 # ==== WebRTC related import ====
-from aiortc import RTCPeerConnection, RTCSessionDescription, MediaStreamTrack
+from aiortc import RTCPeerConnection, RTCSessionDescription, MediaStreamTrack, RTCIceCandidate
 import asyncio
 import json
 from fastapi import WebSocket, WebSocketDisconnect
@@ -54,7 +54,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/")
 def read_index():
-    # Data is recieved via get method
+    # Data is received via get method
     index_path = os.path.join(STATIC_DIR, "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path, media_type="text/html")
@@ -74,7 +74,7 @@ async def chat_voice(file: UploadFile = File(...)):
         # Transcription - Process
         filename = file.filename or "input.webm"
         audio_file = (filename, io.BytesIO(audio_bytes), file.content_type or "audio/webm")
-        
+
         try:
             transcript = client.audio.transcriptions.create(
                 # Model used for Transcription
@@ -86,7 +86,7 @@ async def chat_voice(file: UploadFile = File(...)):
             # Reset BytesIO for retry
             audio_file = (filename, io.BytesIO(audio_bytes), file.content_type or "audio/webm")
             transcript = client.audio.transcriptions.create(
-                # If failure occurs in our model then we are 
+                # If failure occurs in our model then we are
                 model="whisper-1",
                 file=audio_file,
             )
@@ -113,7 +113,7 @@ async def chat_voice(file: UploadFile = File(...)):
                 model="tts-1",  # openAI's tts model
                 voice="alloy",
                 input=reply,
-                response_format="mp3", # Synthesize the reply into MP3
+                response_format="mp3",  # Synthesize the reply into MP3
             ) as resp:
                 for chunk in resp.iter_bytes():
                     yield chunk
@@ -128,37 +128,57 @@ async def chat_voice(file: UploadFile = File(...)):
 
 
 # ==== NEW: WebRTC signaling and audio receiver ====
-class AudioReceiver(MediaStreamTrack): # Class to handle our WebRTC audio
+class AudioReceiver(MediaStreamTrack):  # Class to handle our WebRTC audio
     kind = "audio"
-    def __init__(self, track, on_complete):
+
+    def __init__(self, track, on_complete, min_seconds=3):
         super().__init__()
         self.track = track
         self.buffers = []  # Stores numpy arrays of raw audio data
         self.on_complete = on_complete
         self.closed = False
+        self.sample_rate = 48000
+        self.min_seconds = min_seconds  # flush after N seconds
+        self.frames_per_buffer = int(self.sample_rate * self.min_seconds / 960)  # estimated for 960-sample (20ms) frames
+        self.frame_count = 0
+        self.process_task = None
+        self.sending = False
 
     async def recv(self):
-        frame = await self.track.recv()
-        # aiortc frame is 16-bit PCM, samples per channel
-        pcm = frame.to_ndarray()
-        self.buffers.append(pcm.copy()) # add every frame to the buffer
-        print(f"[WebRTC] Received frame ({pcm.shape})")
-        return frame
+        try:
+            frame = await self.track.recv()
+            pcm = frame.to_ndarray()
+            self.buffers.append(pcm.copy())
+            self.frame_count += 1
+            print(f"[WebRTC] Received frame ({pcm.shape}), total: {self.frame_count}")
+            if not self.sending and len(self.buffers) >= self.frames_per_buffer:
+                self.sending = True
+                asyncio.create_task(self.flush_and_process())
+            return frame
+        except Exception as e:
+            print(f"[WebRTC] recv error: {e}")
+            return None
 
-    async def stop_and_process(self, sample_rate=48000):
-        if self.closed or not self.buffers:
+    async def flush_and_process(self):
+        # Defensive: only process if buffer is big enough and not empty
+        if not self.buffers:
+            self.sending = False
             return
-        self.closed = True
-        # Merge all frames into one array
-        audio_data = np.concatenate(self.buffers, axis=1) if len(self.buffers) else None
-        # Mono or stereo: always write as 16-bit little-endian WAV for OpenAI
+        audio_buffers = self.buffers.copy()
+        self.buffers.clear()
+        self.frame_count = 0
+        print(f"[WebRTC] Flushing {len(audio_buffers)} frames to OpenAI...")
+        audio_data = np.concatenate(audio_buffers, axis=1) if len(audio_buffers) else None
+        
+        # Convert to mono if stereo
+        if audio_data is not None and audio_data.shape[0] > 1:
+            audio_data = np.mean(audio_data, axis=0, keepdims=True)
+        
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp:
-            sf.write(tmp.name, audio_data.T, sample_rate, subtype='PCM_16')
+            sf.write(tmp.name, audio_data.T, self.sample_rate, subtype='PCM_16')
             tmp.flush()
             tmp.seek(0)
-            # Prepare file for OpenAI (simulate UploadFile)
             audio_file = ("input.wav", tmp, "audio/wav")
-            print("[WebRTC] Sending buffered audio to OpenAI...")
             try:
                 transcript = client.audio.transcriptions.create(
                     model="whisper-1",
@@ -169,14 +189,23 @@ class AudioReceiver(MediaStreamTrack): # Class to handle our WebRTC audio
                 await self.on_complete(text)
             except Exception as e:
                 print(f"[WebRTC] Transcription error: {e}")
+                self.sending = False
+
+    async def stop_and_process(self, sample_rate=48000):
+        self.sample_rate = sample_rate
+        if self.closed:
+            return
+        self.closed = True
+        await self.flush_and_process()
 
 
-@app.websocket("/ws") # Web RTC used is Fast API's route /ws 
-                      # Uses aiortc's for handling connections and recieving data
+@app.websocket("/ws")  # Web RTC used is Fast API's route /ws
+# Uses aiortc's for handling connections and receiving data
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     pc = RTCPeerConnection()  # Our new aiortc connection
     audio_receiver = None
+    
     # Function used for audio transcription
     async def handle_complete(text):
         # Respond with the transcribed text and also with audio reply
@@ -209,45 +238,60 @@ async def websocket_endpoint(websocket: WebSocket):
             print(f"[WebRTC] Chat or TTS error: {e}")
 
     try:
-        # Connecting incoming audio track 
+        # Connecting incoming audio track
         @pc.on("track")
         def on_track(track):
             nonlocal audio_receiver
             if track.kind == "audio":
-                audio_receiver = AudioReceiver(track, handle_complete)
+                audio_receiver = AudioReceiver(track, handle_complete, min_seconds=3)
                 print("[WebRTC] Remote audio track received and buffering.")
                 
-                # Listen for the track ending and process audio immediately
-                @track.on("ended")
+                # Use add_listener instead of decorator to avoid scoping issues
                 async def on_ended():
                     print("[WebRTC] Audio track ended. Processing audio...")
                     if audio_receiver:
                         await audio_receiver.stop_and_process()
+                
+                track.add_listener("ended", on_ended)
 
-        # Needs debugging and further processing
+        # WebRTC signaling
         while True:
-            # Support both text and bytes (ignore bytes unless they're browser pings)
-            data = await websocket.receive()
-            msg = None
-            if data.get("type") == "websocket.receive":
-                raw = data.get("text")
-                if raw:
-                    msg = json.loads(raw)
-            if not msg:
-                continue
-            if msg["type"] == "offer":
-                offer = RTCSessionDescription(sdp=msg["sdp"], type=msg["type"])
-                await pc.setRemoteDescription(offer)
-                answer = await pc.createAnswer()
-                await pc.setLocalDescription(answer)
-                await websocket.send_text(json.dumps({
-                    "type": pc.localDescription.type,
-                    "sdp": pc.localDescription.sdp,
-                }))
-            elif msg["type"] == "candidate":
-                candidate = msg["candidate"]
-                await pc.addIceCandidate(candidate)
-    except WebSocketDisconnect:
+            try:
+                data = await websocket.receive()
+                if data["type"] == "websocket.receive" and "text" in data:
+                    msg = json.loads(data["text"])
+                    
+                    if msg["type"] == "offer":
+                        offer = RTCSessionDescription(sdp=msg["sdp"], type=msg["type"])
+                        await pc.setRemoteDescription(offer)
+                        answer = await pc.createAnswer()
+                        await pc.setLocalDescription(answer)
+                        await websocket.send_text(json.dumps({
+                            "type": pc.localDescription.type,
+                            "sdp": pc.localDescription.sdp,
+                        }))
+                    elif msg["type"] == "candidate":
+                        candict = msg["candidate"]
+                        if candict and candict.get('candidate'):
+                            # Properly handle candidate parameters
+                            candidate = RTCIceCandidate(
+                                candict['candidate'],
+                                sdpMid=candict.get('sdpMid', ''),
+                                sdpMLineIndex=candict.get('sdpMLineIndex', -1)
+                            )
+                            await pc.addIceCandidate(candidate)
+            except WebSocketDisconnect:
+                break
+            except json.JSONDecodeError:
+                print("Received non-JSON message")
+            except Exception as e:
+                print(f"WebSocket error: {e}")
+                break
+
+    finally:
+        # Cleanup resources
+        print("Cleaning up WebRTC resources")
         if audio_receiver:
             await audio_receiver.stop_and_process()
-        await pc.close()
+        if pc:
+            await pc.close()
