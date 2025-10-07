@@ -9,3 +9,6 @@ numpy
 soundfile
 scipy
 resampy
+pyaudio 
+pydub
+pygame
