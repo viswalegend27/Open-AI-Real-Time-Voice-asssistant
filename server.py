@@ -198,11 +198,13 @@ class AudioReceiver(MediaStreamTrack):  # Class to handle our WebRTC audio
         self.closed = True
         await self.flush_and_process()
 
-
+# Web-socket endpoint created here
 @app.websocket("/ws")  # Web RTC used is Fast API's route /ws
 # Uses aiortc's for handling connections and receiving data
 async def websocket_endpoint(websocket: WebSocket):
+    # Accepts the connection
     await websocket.accept()
+    # Webrtc peerConnection created
     pc = RTCPeerConnection()  # Our new aiortc connection
     audio_receiver = None
     
@@ -210,6 +212,7 @@ async def websocket_endpoint(websocket: WebSocket):
     async def handle_complete(text):
         # Respond with the transcribed text and also with audio reply
         try:
+            # Audio is send to the websocket
             await websocket.send_text(json.dumps({"transcript": text}))
             # Get a chat reply
             chat = client.chat.completions.create(
@@ -240,9 +243,11 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         # Connecting incoming audio track
         @pc.on("track")
+        # Peerconnection used for listening the audio 
         def on_track(track):
             nonlocal audio_receiver
             if track.kind == "audio":
+                # Once the audio recieved completes it is stored in audio_reciever
                 audio_receiver = AudioReceiver(track, handle_complete, min_seconds=3)
                 print("[WebRTC] Remote audio track received and buffering.")
                 
@@ -262,6 +267,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     msg = json.loads(data["text"])
                     
                     if msg["type"] == "offer":
+                        # Server handles the webRTC signaling 
                         offer = RTCSessionDescription(sdp=msg["sdp"], type=msg["type"])
                         await pc.setRemoteDescription(offer)
                         answer = await pc.createAnswer()

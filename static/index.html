@@ -142,9 +142,10 @@
     liveStatus.textContent = msg;
     console.log('[LIVE]', msg);
   }
-
+  // Websocket is opened when clicked Start live web RTC
   liveStart.onclick = async () => {
     try {
+      // Peer connection var is set
       pc = new RTCPeerConnection();
       ws = new WebSocket(
         (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'
@@ -156,7 +157,9 @@
       });
 
       setLiveStatus('Getting microphone…');
+      // The microphone access is requested
       liveStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Getting audio tracks
       liveStream.getTracks().forEach(track => pc.addTrack(track, liveStream));
 
       pc.onicecandidate = (ev) => {
@@ -164,7 +167,7 @@
           ws.send(JSON.stringify({ type: 'candidate', candidate: ev.candidate }));
         }
       };
-
+      // Listen for any messages
       ws.onmessage = async (event) => {
         let audioBlob = null;
         // Try to handle binary audio data in the most robust way
