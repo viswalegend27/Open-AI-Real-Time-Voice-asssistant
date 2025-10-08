@@ -1,3 +1,4 @@
+// Grabbing references to the buttons and elements
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const statusEl = document.getElementById('status');
@@ -15,6 +16,8 @@ let isStreaming = false;
 // ==========================================
 // Status Update
 // ==========================================
+
+// ==> Just shows us the connection status in UI
 function updateStatus(message, type = 'info') {
     // Add icon prefix based on type
     let icon = '🚗';
@@ -37,6 +40,7 @@ function updateStatus(message, type = 'info') {
 // ==========================================
 // Update Transcripts
 // ==========================================
+// === > Below code functionalities used for our Transcript updation in our screen
 function updateUserTranscript(text) {
     if (userTranscriptEl.classList.contains('empty')) {
         userTranscriptEl.classList.remove('empty');
@@ -83,6 +87,7 @@ function updateStreamingAITranscript(text) {
 // ==========================================
 // Start Conversation
 // ==========================================
+// ==> Starting our conversation with AI
 async function startConversation() {
     try {
         startBtn.disabled = true;
@@ -117,11 +122,11 @@ async function startConversation() {
 
         // 4. Add local microphone audio track
         updateStatus('Requesting microphone access...', 'warning');
-        // Using browser's getUserMedia API to capture User's Audio
+        // Capturing user audio
         audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         
         const audioTrack = audioStream.getAudioTracks()[0];
-        peerConnection.addTrack(audioTrack);
+        peerConnection.addTrack(audioTrack); // Our user's audio track is transferred to webRTC
         console.log('Added local audio track');
 
         updateStatus('Connecting to Ishmael...', 'info');
@@ -135,10 +140,12 @@ async function startConversation() {
             stopBtn.disabled = false;
         });
 
+        // Here our Transcripts data is recieved as JSON format
         dataChannel.addEventListener('message', (event) => {
             try {
                 const msg = JSON.parse(event.data);
                 console.log('Data channel message:', msg);
+                // Function called is called to give out the transcripts
                 handleDataChannelMessage(msg);
             } catch (e) {
                 console.error('Error parsing data channel message:', e);

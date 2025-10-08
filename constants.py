@@ -1,4 +1,8 @@
 # OpenAI Configuration
+"""
+--> Holds down the model's Configuration
+
+"""
 DEFAULT_REALTIME_MODEL = "gpt-4o-realtime-preview-2024-12-17"
 DEFAULT_VOICE = "echo"
 DEFAULT_TRANSCRIBE_MODEL = "whisper-1"
@@ -7,9 +11,14 @@ OPENAI_BASE_URL = "https://api.openai.com"
 OPENAI_BETA_HEADER_VALUE = "realtime=v1"
 
 # AI Agent
+"""
+--> Assistant identity and role is defined down below
+
+"""
 AI_AGENT_NAME = "Ishmael"
 AI_AGENT_ROLE = "Mahindra Automotive Sales Consultant"
 
+# AI Behaviour
 SYSTEM_INSTRUCTIONS = f"""You are {AI_AGENT_NAME}, a professional sales consultant at Mahindra, India's leading automotive company.
 
 **Your Identity:**
@@ -94,8 +103,17 @@ MODEL_TEMPERATURE = 0.8
 
 # Helper Functions
 def get_realtime_session_url():
+    """ 
+--> Return the full-endpoint URL 
+    
+    """
     return f"{OPENAI_BASE_URL}/v1/realtime/sessions"
 
+"""
+--> Payload information that is send to OpenAI.
+--> In simple terms used for sending our AI information through Realtime to OpenAI
+
+"""
 def get_session_payload():
     return {
         "model": DEFAULT_REALTIME_MODEL,
