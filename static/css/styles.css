@@ -1,24 +1,29 @@
 /* ============================================================================
-   RISHI Voice Assistant - Styles
-   Clean, modern, professional design
+   Ishmael - Mahindra Sales Assistant
+   Professional automotive sales theme with Mahindra brand colors
    ============================================================================ */
 
-/* Variables */
+/* CSS Variables - Mahindra Brand Colors */
 :root {
-    --primary: #4f46e5;
-    --primary-dark: #4338ca;
-    --success: #10b981;
-    --error: #ef4444;
-    --bg: #f9fafb;
-    --surface: #ffffff;
-    --text: #111827;
+    --mahindra-red: #c8102e;
+    --mahindra-red-dark: #a00d25;
+    --mahindra-red-light: #e01739;
+    --mahindra-grey: #333333;
+    --mahindra-grey-light: #666666;
+    --professional-blue: #1e3a8a;
+    --bg-light: #f8fafc;
+    --bg-white: #ffffff;
+    --text-dark: #1f2937;
     --text-muted: #6b7280;
-    --border: #e5e7eb;
-    --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-    --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    --border-subtle: #e5e7eb;
+    --success: #10b981;
+    --warning: #f59e0b;
 }
 
-/* Reset */
+/* ==========================================
+   Global Styles & Base
+   ========================================== */
+
 * {
     margin: 0;
     padding: 0;
@@ -27,50 +32,138 @@
 
 html, body {
     height: 100%;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-family: 'Segoe UI', 'Arial', 'Helvetica', sans-serif;
 }
 
 body {
-    background: var(--bg);
-    color: var(--text);
+    background: linear-gradient(135deg, var(--mahindra-grey) 0%, var(--mahindra-grey-light) 100%);
+    color: var(--text-dark);
     line-height: 1.6;
+    position: relative;
+    padding: 2rem;
+    min-height: 100vh;
 }
 
-/* Container */
+/* Subtle grid pattern overlay */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ==========================================
+   Container
+   ========================================== */
+
 .container {
-    max-width: 900px;
+    max-width: 1000px;
     margin: 0 auto;
-    padding: 2rem 1rem;
+    position: relative;
+    z-index: 1;
 }
 
-/* Header */
+/* ==========================================
+   Header - Mahindra Branded
+   ========================================== */
+
 .header {
     text-align: center;
     margin-bottom: 2rem;
+    color: white;
+    padding: 2rem;
+    background: linear-gradient(135deg, var(--mahindra-red) 0%, var(--mahindra-red-dark) 100%);
+    border-radius: 15px;
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+    position: relative;
+    overflow: hidden;
+}
+
+.header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.05) 50%, transparent 70%);
+    animation: shine 3s infinite;
+}
+
+@keyframes shine {
+    0%, 100% { transform: translateX(-100%); }
+    50% { transform: translateX(100%); }
 }
 
 .header h1 {
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: var(--primary);
+    font-size: 2.8rem;
     margin-bottom: 0.5rem;
+    text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.3);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    position: relative;
+    z-index: 1;
 }
 
 .header .subtitle {
-    font-size: 1.125rem;
-    color: var(--text-muted);
+    font-size: 1.3rem;
+    opacity: 0.95;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    position: relative;
+    z-index: 1;
 }
 
-/* Card */
+.subtitle-quote {
+    font-size: 1rem;
+    opacity: 0.9;
+    font-style: italic;
+    color: #fee;
+    margin-top: 0.8rem;
+    padding-top: 0.8rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    position: relative;
+    z-index: 1;
+}
+
+/* ==========================================
+   Card - Main Content Area
+   ========================================== */
+
 .card {
-    background: var(--surface);
-    border-radius: 12px;
-    padding: 2rem;
-    box-shadow: var(--shadow-lg);
-    margin-bottom: 1.5rem;
+    background: linear-gradient(to bottom, #ffffff, #f9fafb);
+    border-radius: 15px;
+    padding: 2.5rem;
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.3);
+    margin-bottom: 2rem;
+    border: 2px solid var(--border-subtle);
+    position: relative;
 }
 
-/* Controls */
+/* Mahindra red accent bar */
+.card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 6px;
+    background: linear-gradient(90deg, var(--mahindra-red), var(--mahindra-red-light), var(--mahindra-red));
+}
+
+/* ==========================================
+   Controls - Buttons
+   ========================================== */
+
 .controls {
     display: flex;
     gap: 1rem;
@@ -81,21 +174,24 @@ body {
 }
 
 .btn {
-    padding: 0.75rem 2rem;
+    padding: 1rem 2.5rem;
     border: none;
-    border-radius: 8px;
-    font-size: 1rem;
+    border-radius: 10px;
+    font-size: 1.05rem;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.6rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    font-size: 0.95rem;
 }
 
 .btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-lg);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
 }
 
 .btn:disabled {
@@ -103,119 +199,195 @@ body {
     cursor: not-allowed;
 }
 
+/* Primary Button - Mahindra Red */
 .btn-primary {
-    background: var(--primary);
+    background: linear-gradient(135deg, var(--mahindra-red) 0%, var(--mahindra-red-dark) 100%);
     color: white;
+    box-shadow: 0 4px 15px rgba(200, 16, 46, 0.4);
 }
 
 .btn-primary:hover:not(:disabled) {
-    background: var(--primary-dark);
+    background: linear-gradient(135deg, var(--mahindra-red-light) 0%, var(--mahindra-red) 100%);
+    box-shadow: 0 6px 20px rgba(200, 16, 46, 0.5);
 }
 
+/* Danger Button */
 .btn-danger {
-    background: var(--error);
+    background: linear-gradient(135deg, var(--mahindra-grey) 0%, var(--mahindra-grey-light) 100%);
     color: white;
+    box-shadow: 0 4px 15px rgba(51, 51, 51, 0.3);
 }
 
 .btn-danger:hover:not(:disabled) {
-    background: #dc2626;
+    background: linear-gradient(135deg, var(--mahindra-grey-light) 0%, #888 100%);
+    box-shadow: 0 6px 20px rgba(51, 51, 51, 0.4);
 }
 
-/* Status */
+/* ==========================================
+   Status Indicator
+   ========================================== */
+
 .status {
-    padding: 0.75rem 1.5rem;
-    border-radius: 8px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    font-size: 0.95rem;
+    padding: 0.9rem 1.8rem;
+    border-radius: 10px;
+    background: var(--bg-light);
+    border: 2px solid var(--border-subtle);
+    font-size: 1rem;
     color: var(--text-muted);
+    font-weight: 500;
+    transition: all 0.3s ease;
 }
 
-.status.live {
-    background: #ecfdf5;
-    color: var(--success);
-    border-color: var(--success);
-    animation: pulse 2s infinite;
+.status-success {
+    color: #065f46;
+    background: linear-gradient(to right, #d1fae5, #ecfdf5);
+    border: 2px solid var(--success);
+    font-weight: 600;
+    animation: pulse-success 2s infinite;
 }
 
-@keyframes pulse {
+.status-error {
+    color: #991b1b;
+    background: linear-gradient(to right, #fee2e2, #fef2f2);
+    border: 2px solid var(--mahindra-red);
+    font-weight: 600;
+}
+
+.status-warning {
+    color: #92400e;
+    background: linear-gradient(to right, #fef3c7, #fffbeb);
+    border: 2px solid var(--warning);
+    font-weight: 600;
+}
+
+@keyframes pulse-success {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
+    50% { opacity: 0.85; }
 }
 
-/* Transcripts */
+/* ==========================================
+   Transcripts - Conversation Display
+   ========================================== */
+
 .transcripts {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
     gap: 1.5rem;
     margin-bottom: 2rem;
 }
 
 .transcript-box {
-    background: var(--surface);
+    background: white;
     border-radius: 12px;
     padding: 1.5rem;
-    box-shadow: var(--shadow);
-    display: flex;
-    flex-direction: column;
-    height: 400px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    border: 2px solid var(--border-subtle);
+    transition: all 0.3s ease;
+}
+
+.transcript-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+    border-color: var(--mahindra-red-light);
 }
 
 .transcript-label {
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 1rem;
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    font-weight: 700;
+    color: var(--mahindra-red);
+    margin-bottom: 0.8rem;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.6rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .transcript-content {
+    min-height: 180px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 1.2rem;
+    background: linear-gradient(to bottom, #fefefe, #f9fafb);
+    border-radius: 10px;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 1rem;
+    line-height: 1.7;
     white-space: pre-wrap;
     word-wrap: break-word;
-    line-height: 1.8;
-    color: var(--text);
-    font-size: 0.95rem;
-    flex: 1;
-    overflow-y: auto;
-    padding: 0.5rem;
-    background: var(--bg);
-    border-radius: 6px;
-    border: 1px solid var(--border);
+    border: 2px solid #e5e7eb;
+    color: var(--text-dark);
 }
 
 .transcript-content.empty {
     color: var(--text-muted);
     font-style: italic;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
 }
 
-/* Audio Player */
+/* Custom scrollbar - Mahindra themed */
+.transcript-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.transcript-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.transcript-content::-webkit-scrollbar-thumb {
+    background: var(--mahindra-red);
+    border-radius: 10px;
+}
+
+.transcript-content::-webkit-scrollbar-thumb:hover {
+    background: var(--mahindra-red-dark);
+}
+
+/* ==========================================
+   Audio Player
+   ========================================== */
+
 .audio-player {
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border);
+    margin-top: 1.2rem;
+    padding-top: 1.2rem;
+    border-top: 2px solid var(--border-subtle);
 }
 
 .audio-player audio {
     width: 100%;
-    height: 40px;
+    height: 45px;
+    border-radius: 8px;
 }
 
-/* Info Box */
+/* ==========================================
+   Info Box - Vehicle Information
+   ========================================== */
+
 .info-box {
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    border-radius: 8px;
-    padding: 1.5rem;
+    background: white;
+    border-radius: 15px;
+    padding: 2.5rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    border: 2px solid var(--mahindra-red);
 }
 
 .info-box h3 {
-    color: var(--primary);
-    font-size: 1rem;
+    color: var(--mahindra-red);
     margin-bottom: 1rem;
+    font-size: 1.8rem;
+    font-weight: 700;
+}
+
+.info-box h4 {
+    color: var(--mahindra-grey);
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.8rem;
 }
 
 .info-list {
@@ -224,43 +396,87 @@ body {
 }
 
 .info-list li {
-    padding: 0.5rem 0;
-    padding-left: 1.5rem;
+    padding: 0.6rem 0;
+    padding-left: 2rem;
     position: relative;
     color: var(--text-muted);
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    line-height: 1.6;
 }
 
 .info-list li:before {
     content: "✓";
     position: absolute;
     left: 0;
-    color: var(--success);
+    color: var(--mahindra-red);
     font-weight: bold;
+    font-size: 1.2rem;
 }
 
-/* Responsive */
+.info-list li strong {
+    color: var(--mahindra-red);
+    font-weight: 600;
+}
+
+/* ==========================================
+   Responsive Design
+   ========================================== */
+
 @media (max-width: 768px) {
+    body {
+        padding: 1rem;
+    }
+
     .header h1 {
         font-size: 2rem;
     }
-    
+
+    .header .subtitle {
+        font-size: 1.1rem;
+    }
+
+    .subtitle-quote {
+        font-size: 0.9rem;
+    }
+
+    .card {
+        padding: 1.5rem;
+    }
+
     .transcripts {
         grid-template-columns: 1fr;
     }
-    
+
     .controls {
         flex-direction: column;
         width: 100%;
     }
-    
+
     .btn {
         width: 100%;
         justify-content: center;
     }
+
+    .info-box {
+        padding: 1.5rem;
+    }
 }
 
-/* Utility */
+@media (max-width: 480px) {
+    .header h1 {
+        font-size: 1.6rem;
+    }
+
+    .btn {
+        padding: 0.8rem 1.5rem;
+        font-size: 0.9rem;
+    }
+}
+
+/* ==========================================
+   Utility Classes
+   ========================================== */
+
 .text-center {
     text-align: center;
 }
@@ -274,3 +490,16 @@ body {
 .mt-2 { margin-top: 1rem; }
 .mt-3 { margin-top: 1.5rem; }
 .mt-4 { margin-top: 2rem; }
+
+/* ==========================================
+   Accessibility
+   ========================================== */
+
+*:focus {
+    outline: 2px solid var(--mahindra-red);
+    outline-offset: 2px;
+}
+
+button:focus {
+    outline: 3px solid var(--mahindra-red-light);
+}

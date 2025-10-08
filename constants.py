@@ -185,7 +185,7 @@ def get_realtime_session_url():
     """Get the full URL for creating a realtime session"""
     return f"{OPENAI_BASE_URL}/v1/realtime/sessions"
 
-
+# 3 Payload structure set in here
 def get_session_payload():
     """Get the complete payload for creating a realtime session"""
     return {

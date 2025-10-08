@@ -67,11 +67,6 @@ async def read_root():
 @app.get("/api/session")
 @app.post("/api/session")
 async def create_realtime_session():
-    """
-    Creates an ephemeral OpenAI Realtime session for browser WebRTC.
-    Returns a client_secret that the browser uses to connect directly to OpenAI.
-    """
-    
     # Get payload from constants
     payload = C.get_session_payload()
     # Override with environment variables if set

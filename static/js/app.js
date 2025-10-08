@@ -1,13 +1,9 @@
-// ==========================================
-// Ishmael - Mahindra Sales Assistant
-// Your trusted automotive sales consultant
-// ==========================================
-
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const statusEl = document.getElementById('status');
 const userTranscriptEl = document.getElementById('userTranscript');
 const aiTranscriptEl = document.getElementById('aiTranscript');
+// 1 Getting our audio element responsible for recieving
 const aiAudioEl = document.getElementById('aiAudio');
 
 let peerConnection = null;
@@ -93,12 +89,15 @@ async function startConversation() {
         updateStatus('Connecting to Mahindra assistant...', 'info');
 
         // 1. Request ephemeral token from our backend
+        // 4. Response object is set to recieve payload
         const response = await fetch('/api/session');
         if (!response.ok) {
             throw new Error(`Failed to get session: ${response.status}`);
         }
         
+        // Storing the response as it is in original format
         const data = await response.json();
+        // 6. Session key recieved
         const EPHEMERAL_KEY = data.client_secret.value;
 
         updateStatus('Preparing consultation session...', 'info');
@@ -112,11 +111,13 @@ async function startConversation() {
 
         peerConnection.ontrack = (event) => {
             console.log('Received audio track from OpenAI');
+            // 2 Comming audio stream over WebRTC and assigned to this object
             audioEl.srcObject = event.streams[0];
         };
 
         // 4. Add local microphone audio track
         updateStatus('Requesting microphone access...', 'warning');
+        // Using browser's getUserMedia API to capture User's Audio
         audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         
         const audioTrack = audioStream.getAudioTracks()[0];
@@ -161,6 +162,7 @@ async function startConversation() {
         // 7. Send offer to OpenAI Realtime API
         const baseUrl = 'https://api.openai.com/v1/realtime';
         const model = 'gpt-4o-realtime-preview-2024-12-17';
+        // 7 Response recieved is directly sent to Open_AI
         const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
             method: 'POST',
             body: offer.sdp,
@@ -219,6 +221,7 @@ function stopConversation() {
 // ==========================================
 // Handle Data Channel Messages from OpenAI
 // ==========================================
+// == AI Transcript and User Transcript == 
 function handleDataChannelMessage(msg) {
     const type = msg.type;
 
