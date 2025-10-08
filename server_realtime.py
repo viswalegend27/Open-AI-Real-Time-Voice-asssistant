@@ -42,7 +42,6 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 os.makedirs(STATIC_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-
 @app.get("/")
 async def read_root():
     """Serve the main Ishmael interface"""
@@ -60,7 +59,6 @@ async def read_root():
         {"error": "Interface HTML not found in static folder"},
         status_code=404
     )
-
 
 @app.get("/session/")
 @app.post("/session/")
@@ -116,7 +114,6 @@ async def create_realtime_session():
         logger.error(f"Unexpected error creating session: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Session creation failed: {str(e)}")
 
-
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -128,7 +125,6 @@ async def health_check():
         "model": OPENAI_REALTIME_MODEL,
         "voice": OPENAI_VOICE
     }
-
 
 if __name__ == "__main__":
     import uvicorn
