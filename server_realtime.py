@@ -79,6 +79,7 @@ async def create_realtime_session():
     
     try:
         # Make request to OpenAI Realtime API
+        # Here our seesion token is obtained
         headers = {
             "Authorization": f"Bearer {OPENAI_API_KEY}",
             "Content-Type": "application/json",

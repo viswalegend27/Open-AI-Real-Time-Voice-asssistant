@@ -167,6 +167,7 @@ async function startConversation() {
             method: 'POST',
             body: offer.sdp,
             headers: {
+                // Authorization token
                 'Authorization': `Bearer ${EPHEMERAL_KEY}`,
                 'Content-Type': 'application/sdp'
             },
