@@ -1,0 +1,1 @@
+﻿# Voice Assistant Django Project

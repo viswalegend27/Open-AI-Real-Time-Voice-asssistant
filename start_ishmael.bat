@@ -1,13 +1,13 @@
 @echo off
 REM ==========================================
 REM Ishmael Voice Assistant - Startup Script
-REM "Call me Ishmael..."
+REM "Call me Ishmael..." - Django Version
 REM ==========================================
 
 echo.
 echo ========================================
 echo    Starting Ishmael Voice Assistant
-echo    "Call me Ishmael..."
+echo    "Call me Ishmael..." (Django)
 echo ========================================
 echo.
 
@@ -31,7 +31,7 @@ call venv\Scripts\activate.bat
 
 REM Install/update dependencies
 echo Installing dependencies...
-pip install -q fastapi uvicorn python-dotenv httpx
+pip install -q -r requirements.txt
 
 REM Check if .env file exists
 if not exist ".env" (
@@ -43,14 +43,14 @@ if not exist ".env" (
     exit /b 1
 )
 
-REM Start the server
+REM Start the Django server
 echo.
 echo ========================================
-echo    Launching Ishmael Server...
+echo    Launching Ishmael Django Server...
 echo ========================================
 echo.
 
-python server_realtime.py
+python manage.py runserver 127.0.0.1:8000
 
 REM Keep window open if there's an error
 if errorlevel 1 (

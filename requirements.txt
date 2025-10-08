@@ -1,14 +1,5 @@
+Django>=4.2,<5.0
+django-cors-headers>=4.3.0
 python-dotenv
-fastapi
-uvicorn[standard]
 openai
-python-dotenv
-aiortc
-aiohttp
-numpy
-soundfile
-scipy
-resampy
-pyaudio 
-pydub
-pygame
+httpx

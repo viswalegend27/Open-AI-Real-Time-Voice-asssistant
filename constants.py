@@ -1,58 +1,14 @@
-# ============================================================================
-# OPENAI API CONFIGURATION
-# ============================================================================
-
-# Default model for realtime API
+# OpenAI Configuration
 DEFAULT_REALTIME_MODEL = "gpt-4o-realtime-preview-2024-12-17"
-
-# Available voices: alloy, echo, fable, onyx, nova, shimmer
-# Using 'echo' for Ishmael - professional, clear, well-suited for sales
 DEFAULT_VOICE = "echo"
-
-# Transcription model
 DEFAULT_TRANSCRIBE_MODEL = "whisper-1"
-
-# Modalities
 DEFAULT_MODALITIES = ["text", "audio"]
-
-# OpenAI API base URL
 OPENAI_BASE_URL = "https://api.openai.com"
-
-# Beta header for realtime API
 OPENAI_BETA_HEADER_VALUE = "realtime=v1"
 
-
-# ============================================================================
-# AI AGENT CHARACTERISTICS
-# ============================================================================
-
+# AI Agent
 AI_AGENT_NAME = "Ishmael"
-
 AI_AGENT_ROLE = "Mahindra Automotive Sales Consultant"
-
-AI_AGENT_PERSONALITY = {
-    "traits": [
-        "Professional and trustworthy",
-        "Enthusiastic about automobiles",
-        "Customer-focused and attentive",
-        "Knowledgeable about Mahindra products",
-        "Persuasive yet genuine",
-        "Solution-oriented"
-    ],
-    "communication_style": "friendly, consultative, and confident",
-    "expertise": [
-        "Mahindra vehicle lineup (SUVs, Electric Vehicles, Commercial)",
-        "Vehicle features, specifications, and comparisons",
-        "Financing options and offers",
-        "Customer needs assessment",
-        "After-sales service and warranty information",
-        "Test drive scheduling and dealership support"
-    ]
-}
-
-# ============================================================================
-# SYSTEM INSTRUCTIONS (AI AGENT PERSONA)
-# ============================================================================
 
 SYSTEM_INSTRUCTIONS = f"""You are {AI_AGENT_NAME}, a professional sales consultant at Mahindra, India's leading automotive company.
 
@@ -132,93 +88,21 @@ Key Strengths:
 Remember: You are {AI_AGENT_NAME} from Mahindra. Your goal is to help customers find the vehicle that will enhance their life - whether it's adventure with the Thar, family safety with XUV700, or sustainable driving with XUV400 Electric. Be their guide to Mahindra excellence."""
 
 
-# ============================================================================
-# VOICE ACTIVITY DETECTION (VAD) SETTINGS
-# ============================================================================
+# Configuration
+VAD_CONFIG = {"type": "server_vad", "threshold": 0.5, "prefix_padding_ms": 200, "silence_duration_ms": 500}
+MODEL_TEMPERATURE = 0.8
 
-VAD_CONFIG = {
-    "type": "server_vad",
-    "threshold": 0.5,
-    "prefix_padding_ms": 200,
-    "silence_duration_ms": 500
-}
-
-
-# ============================================================================
-# MODEL PARAMETERS
-# ============================================================================
-
-MODEL_TEMPERATURE = 0.8  # 0.0 to 1.0 - controls randomness
-
-
-# ============================================================================
-# UI CONFIGURATION
-# ============================================================================
-
-UI_CONFIG = {
-    "app_title": f"{AI_AGENT_NAME} - Mahindra Sales Assistant",
-    "app_subtitle": "Mahindra Automotive Sales Consultant",
-    "welcome_message": f"Namaste! I'm {AI_AGENT_NAME}, your Mahindra sales consultant. Let's find the perfect vehicle for you.",
-    "instructions": [
-        "Click 'Start Conversation' to begin",
-        "Allow microphone access when prompted",
-        "Tell me about your vehicle needs and preferences",
-        "I'll help you find the perfect Mahindra vehicle",
-        "Click 'End Conversation' when you're done"
-    ],
-    "features": [
-        "Real-time voice consultation",
-        "Expert knowledge of Mahindra vehicle lineup",
-        "Personalized vehicle recommendations",
-        "Financing and offers information",
-        "Test drive scheduling assistance",
-        "Transparent and honest guidance"
-    ]
-}
-
-
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
+# Helper Functions
 def get_realtime_session_url():
-    """Get the full URL for creating a realtime session"""
     return f"{OPENAI_BASE_URL}/v1/realtime/sessions"
 
-# 3 Payload structure set in here
 def get_session_payload():
-    """Get the complete payload for creating a realtime session"""
     return {
         "model": DEFAULT_REALTIME_MODEL,
         "modalities": DEFAULT_MODALITIES,
         "voice": DEFAULT_VOICE,
         "instructions": SYSTEM_INSTRUCTIONS,
         "turn_detection": VAD_CONFIG,
-        "input_audio_transcription": {
-            "model": DEFAULT_TRANSCRIBE_MODEL
-        },
+        "input_audio_transcription": {"model": DEFAULT_TRANSCRIBE_MODEL},
         "temperature": MODEL_TEMPERATURE,
     }
-
-
-# ============================================================================
-# EXPORT ALL CONSTANTS
-# ============================================================================
-
-__all__ = [
-    'DEFAULT_REALTIME_MODEL',
-    'DEFAULT_VOICE',
-    'DEFAULT_TRANSCRIBE_MODEL',
-    'DEFAULT_MODALITIES',
-    'OPENAI_BASE_URL',
-    'OPENAI_BETA_HEADER_VALUE',
-    'AI_AGENT_NAME',
-    'AI_AGENT_ROLE',
-    'AI_AGENT_PERSONALITY',
-    'SYSTEM_INSTRUCTIONS',
-    'VAD_CONFIG',
-    'MODEL_TEMPERATURE',
-    'UI_CONFIG',
-    'get_realtime_session_url',
-    'get_session_payload'
-]
