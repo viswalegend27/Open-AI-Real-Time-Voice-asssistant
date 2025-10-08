@@ -1,9 +1,3 @@
-"""
-Ishmael - OpenAI Realtime Voice Assistant Server
-Creates ephemeral sessions for browser-to-OpenAI WebRTC connections
-"Call me Ishmael..." - Your intelligent technical companion
-"""
-
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
