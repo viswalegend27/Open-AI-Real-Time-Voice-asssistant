@@ -72,3 +72,41 @@ class Recommendation(models.Model):
         
     def __str__(self):
         return f"{self.vehicle_name} - Score: {self.match_score}"
+
+class ConversationSummary(models.Model):
+    """Stores AI-generated conversation summary and key details"""
+    conversation = models.OneToOneField(Conversation, on_delete=models.CASCADE, related_name='summary')
+    
+    # AI-Generated Summary
+    summary_text = models.TextField(help_text="AI-generated conversation summary")
+    
+    # Key Details (Structured)
+    customer_name = models.CharField(max_length=255, null=True, blank=True)
+    contact_info = models.CharField(max_length=255, null=True, blank=True)
+    
+    # Requirements
+    budget_range = models.CharField(max_length=100, null=True, blank=True)
+    vehicle_type = models.CharField(max_length=100, null=True, blank=True)
+    use_case = models.CharField(max_length=255, null=True, blank=True)
+    priority_features = models.JSONField(default=list, help_text="List of important features")
+    
+    # Recommendations Given
+    recommended_vehicles = models.JSONField(default=list, help_text="Vehicles recommended during conversation")
+    
+    # Next Steps
+    next_actions = models.JSONField(default=list, help_text="Suggested follow-up actions")
+    
+    # Engagement Metrics
+    sentiment = models.CharField(max_length=50, null=True, blank=True, help_text="Overall sentiment: positive/neutral/negative")
+    engagement_score = models.IntegerField(default=5, help_text="1-10 scale")
+    purchase_intent = models.CharField(max_length=50, null=True, blank=True, help_text="high/medium/low")
+    
+    # Metadata
+    generated_at = models.DateTimeField(default=timezone.now)
+    
+    class Meta:
+        ordering = ['-generated_at']
+        verbose_name_plural = "Conversation Summaries"
+        
+    def __str__(self):
+        return f"Summary for {self.conversation.session_id[:8]} - {self.purchase_intent or 'Unknown'} intent"

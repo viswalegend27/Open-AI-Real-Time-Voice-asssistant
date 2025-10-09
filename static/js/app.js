@@ -13,6 +13,8 @@ let audioStream = null;
 let currentAIResponse = '';
 let isStreaming = false;
 let sessionId = null;
+let summaryInProgress = false; // Prevent duplicate summary attempts
+let summaryIntroComplete = false; // Track if AI finished intro before summary
 
 // Generate unique session ID
 function generateSessionId() {
@@ -251,11 +253,132 @@ function stopConversation() {
 }
 
 // ==========================================
+// Handle Function Calls
+// ==========================================
+async function handleFunctionCall(functionName, args, callId) {
+    console.log(`🔧 Function call: ${functionName}`, args, 'Call ID:', callId);
+    
+    if (functionName === 'generate_conversation_summary') {
+        // Prevent duplicate calls
+        if (summaryInProgress) {
+            console.log('⏳ Summary already in progress, skipping...');
+            return {status: 'in_progress'};
+        }
+        
+        try {
+            summaryInProgress = true;
+            summaryIntroComplete = false;
+            
+            // Validate session has enough data
+            if (!sessionId) {
+                console.warn('⚠️ No session ID available');
+                updateAITranscript('Ishmael: We need to have a conversation first before I can generate a summary. Please tell me about your vehicle requirements!');
+                updateStatus('Ready', 'info');
+                summaryInProgress = false;
+                return {status: 'no_session'};
+            }
+            
+            // Show loading indicator
+            updateStatus('Generating summary...', 'warning');
+            console.log('📊 Calling summary API for session:', sessionId);
+            
+            // Call backend API to generate summary
+            const response = await fetch('/api/generate-summary', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({session_id: sessionId})
+            });
+            
+            console.log('📡 Summary API response status:', response.status);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ API Error:', errorText);
+                throw new Error(`API returned ${response.status}`);
+            }
+            
+            const result = await response.json();
+            console.log('📦 Summary result:', result);
+            
+            if (result.status === 'success' && result.formatted_summary) {
+                console.log('✅ Summary generated successfully');
+                
+                // Send function response back to OpenAI so it can speak about it
+                if (dataChannel && dataChannel.readyState === 'open' && callId) {
+                    const functionResponse = {
+                        type: 'conversation.item.create',
+                        item: {
+                            type: 'function_call_output',
+                            call_id: callId,
+                            output: JSON.stringify({
+                                status: 'success',
+                                message: 'Summary generated successfully. Here\'s what we discussed:',
+                                summary_text: result.summary.summary || 'Summary generated'
+                            })
+                        }
+                    };
+                    
+                    console.log('📤 Sending function response to OpenAI:', functionResponse);
+                    dataChannel.send(JSON.stringify(functionResponse));
+                    
+                    // Trigger AI to respond
+                    dataChannel.send(JSON.stringify({type: 'response.create'}));
+                }
+                
+                // Display formatted summary after AI speaks (give it time)
+                setTimeout(() => {
+                    updateAITranscript(result.formatted_summary);
+                    saveMessageToDatabase('assistant', result.formatted_summary);
+                    
+                    console.log('📝 Summary displayed');
+                    updateStatus('Connected! How can I help you?', 'success');
+                    summaryInProgress = false;
+                }, 3000); // Wait 3 seconds for AI to speak
+                
+                return result;
+            } else if (result.status === 'error' && result.message && result.message.includes('No messages found')) {
+                // Not enough conversation data yet
+                console.warn('⚠️ Not enough conversation data');
+                updateAITranscript('Ishmael: We just started our conversation! Let\'s discuss your vehicle needs first, and then I\'ll provide a comprehensive summary.');
+                updateStatus('Connected! How can I help you?', 'success');
+                summaryInProgress = false;
+                return {status: 'insufficient_data'};
+            } else {
+                summaryInProgress = false;
+                throw new Error(result.message || 'Failed to generate summary');
+            }
+            
+        } catch (error) {
+            console.error('❌ Summary generation error:', error);
+            updateStatus('Connected! How can I help you?', 'success');
+            summaryInProgress = false;
+            
+            // Provide a helpful message instead of generic error
+            updateAITranscript('Ishmael: I\'d be happy to provide a summary once we\'ve had a proper conversation! Please tell me about your vehicle requirements - budget, usage, preferences - and I\'ll give you personalized recommendations.');
+            
+            return {error: error.message};
+        }
+    }
+    
+    // Handle other function calls (recommendations, analysis, etc.)
+    if (functionName === 'analyze_user_needs' || functionName === 'get_user_recommendations') {
+        console.log(`📊 ${functionName} called - processing...`);
+        // These can be handled similarly if needed
+        return {status: 'acknowledged'};
+    }
+}
+
+// ==========================================
 // Handle Data Channel Messages from OpenAI
 // ==========================================
 // == AI Transcript and User Transcript == 
 function handleDataChannelMessage(msg) {
     const type = msg.type;
+    
+    // Log ALL events for debugging (can be removed later)
+    if (type && !type.includes('audio') && !type.includes('delta')) {
+        console.log('📨 Event:', type, msg);
+    }
 
     // User speech transcription
     if (type === 'conversation.item.input_audio_transcription.completed') {
@@ -263,6 +386,74 @@ function handleDataChannelMessage(msg) {
         updateUserTranscript(`You: ${transcript}`);
         // Save user message to database
         saveMessageToDatabase('user', transcript);
+        
+        // FALLBACK: Check if user is asking for summary/likings/preferences
+        // If OpenAI doesn't call the function, we trigger it ourselves
+        const lowerTranscript = transcript.toLowerCase();
+        const summaryKeywords = [
+            'summary', 'summarize', 'recap', 'what did we discuss',
+            'my likings', 'my liking', 'my preferences', 'my preference',
+            'what i like', 'what do i like', 'my interests', 'my interest',
+            'my requirements', 'my requirement', 'what i want', 'my needs'
+        ];
+        
+        const hasSummaryKeyword = summaryKeywords.some(keyword => lowerTranscript.includes(keyword));
+        
+        if (hasSummaryKeyword && !summaryInProgress) {
+            console.log('\ud83d\udea8 Summary keyword detected in user speech:', transcript);
+            console.log('\u23f3 Waiting 2 seconds to see if OpenAI calls function...');
+            
+            // Wait 2 seconds - if OpenAI doesn't call the function, we do it ourselves
+            setTimeout(() => {
+                if (!summaryInProgress) {
+                    console.log('\ud83d\udd04 OpenAI didn\'t call function, triggering manually...');
+                    handleFunctionCall('generate_conversation_summary', {session_id: sessionId}, null);
+                }
+            }, 2000);
+        }
+    }
+
+    // Function/Tool call events - Multiple possible formats
+    // Format 1: response.function_call_arguments.done
+    if (type === 'response.function_call_arguments.done') {
+        const functionName = msg.name;
+        const args = JSON.parse(msg.arguments || '{}');
+        const callId = msg.call_id || msg.item_id || null;
+        
+        console.log('🎯 Function call detected (format 1):', functionName, 'ID:', callId);
+        handleFunctionCall(functionName, args, callId);
+        
+        isStreaming = false;
+        currentAIResponse = '';
+        return;
+    }
+    
+    // Format 2: response.output_item.done with function_call
+    if (type === 'response.output_item.done' && msg.item?.type === 'function_call') {
+        const functionName = msg.item.name;
+        const args = JSON.parse(msg.item.arguments || '{}');
+        const callId = msg.item.call_id || msg.item.id || null;
+        
+        console.log('🎯 Function call detected (format 2):', functionName, 'ID:', callId);
+        handleFunctionCall(functionName, args, callId);
+        
+        isStreaming = false;
+        currentAIResponse = '';
+        return;
+    }
+    
+    // Format 3: conversation.item.created with function_call
+    if (type === 'conversation.item.created' && msg.item?.type === 'function_call') {
+        const functionName = msg.item.name;
+        const args = JSON.parse(msg.item.arguments || '{}');
+        const callId = msg.item.call_id || msg.item.id || null;
+        
+        console.log('🎯 Function call detected (format 3):', functionName, 'ID:', callId);
+        handleFunctionCall(functionName, args, callId);
+        
+        isStreaming = false;
+        currentAIResponse = '';
+        return;
     }
 
     // AI response started - clear previous response buffer and mark as streaming
@@ -273,6 +464,8 @@ function handleDataChannelMessage(msg) {
 
     // AI audio transcript delta (streaming in real-time)
     if (type === 'response.audio_transcript.delta') {
+        // Don't suppress - let AI speak naturally
+        
         const delta = msg.delta || '';
         currentAIResponse += delta;
         
@@ -288,6 +481,8 @@ function handleDataChannelMessage(msg) {
 
     // AI audio transcript complete - finalize and stop streaming mode
     if (type === 'response.audio_transcript.done') {
+        // Let AI speak naturally about the summary
+        
         const transcript = msg.transcript || currentAIResponse;
         
         // Finalize the transcript

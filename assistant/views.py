@@ -104,3 +104,74 @@ def get_recommendations(request):
     
     result = get_recs(session_id)
     return JsonResponse(result)
+
+@csrf_exempt
+def generate_summary(request):
+    """Generate AI-powered conversation summary"""
+    from assistant.analyzer import generate_conversation_summary
+    import json
+    
+    # Get session_id from GET, POST params, or request body
+    session_id = request.GET.get('session_id') or request.POST.get('session_id')
+    
+    if not session_id and request.body:
+        try:
+            body_data = json.loads(request.body)
+            session_id = body_data.get('session_id')
+        except:
+            pass
+    
+    if not session_id:
+        return JsonResponse({"error": "session_id required"}, status=400)
+    
+    result = generate_conversation_summary(session_id)
+    
+    # If successful, include the formatted summary for easy display
+    if result.get('status') == 'success' and result.get('formatted_summary'):
+        result['display_text'] = result['formatted_summary']
+    
+    return JsonResponse(result)
+
+@csrf_exempt
+def get_summary(request, session_id):
+    """Retrieve existing conversation summary"""
+    from assistant.models import Conversation
+    
+    try:
+        conv = Conversation.objects.get(session_id=session_id)
+        
+        # Check if summary exists
+        if hasattr(conv, 'summary'):
+            summary = conv.summary
+            return JsonResponse({
+                "status": "success",
+                "summary": {
+                    "text": summary.summary_text,
+                    "customer_name": summary.customer_name,
+                    "contact_info": summary.contact_info,
+                    "budget_range": summary.budget_range,
+                    "vehicle_type": summary.vehicle_type,
+                    "use_case": summary.use_case,
+                    "priority_features": summary.priority_features,
+                    "recommended_vehicles": summary.recommended_vehicles,
+                    "next_actions": summary.next_actions,
+                    "sentiment": summary.sentiment,
+                    "engagement_score": summary.engagement_score,
+                    "purchase_intent": summary.purchase_intent,
+                    "generated_at": summary.generated_at.isoformat()
+                },
+                "conversation": {
+                    "session_id": conv.session_id,
+                    "started_at": conv.started_at.isoformat(),
+                    "ended_at": conv.ended_at.isoformat() if conv.ended_at else None,
+                    "total_messages": conv.total_messages
+                }
+            })
+        else:
+            return JsonResponse({
+                "status": "not_found",
+                "message": "Summary not generated yet. Call /api/generate-summary/ first."
+            }, status=404)
+            
+    except Conversation.DoesNotExist:
+        return JsonResponse({"error": "Conversation not found"}, status=404)
