@@ -4,7 +4,6 @@ const stopBtn = document.getElementById('stopBtn');
 const statusEl = document.getElementById('status');
 const userTranscriptEl = document.getElementById('userTranscript');
 const aiTranscriptEl = document.getElementById('aiTranscript');
-// 1 Getting our audio element responsible for recieving
 const aiAudioEl = document.getElementById('aiAudio');
 
 let peerConnection = null;
@@ -18,18 +17,17 @@ let summaryIntroComplete = false; // Track if AI finished intro before summary
 
 // Generate unique session ID
 function generateSessionId() {
-    return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    return `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
 // Save message to database
 async function saveMessageToDatabase(role, content) {
     if (!sessionId || !content) return;
-    
     try {
         await fetch('/api/conversation', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({session_id: sessionId, role: role, content: content})
+            body: JSON.stringify({session_id: sessionId, role, content })
         });
         console.log(`💾 Saved ${role} message to database`);
     } catch (e) {
@@ -44,21 +42,12 @@ async function saveMessageToDatabase(role, content) {
 // ==> Just shows us the connection status in UI
 function updateStatus(message, type = 'info') {
     // Add icon prefix based on type
-    let icon = '🚗';
-    if (type === 'success') icon = '✅';
-    else if (type === 'error') icon = '❌';
-    else if (type === 'warning') icon = '⏳';
-    
-    statusEl.textContent = `${icon} ${message}`;
+    const iconMap = { success: '✅', error: '❌', warning: '⏳', info: '🚗' };
+    statusEl.textContent = `${iconMap[type] || iconMap.info} ${message}`;
     statusEl.className = 'status';
-    
-    if (type === 'error') {
-        statusEl.classList.add('status-error');
-    } else if (type === 'success') {
-        statusEl.classList.add('status-success');
-    } else if (type === 'warning') {
-        statusEl.classList.add('status-warning');
-    }
+    if (type === 'error') statusEl.classList.add('status-error');
+    else if (type === 'success') statusEl.classList.add('status-success');
+    else if (type === 'warning') statusEl.classList.add('status-warning');
 }
 
 // ==========================================
@@ -70,7 +59,7 @@ function updateUserTranscript(text) {
         userTranscriptEl.classList.remove('empty');
         userTranscriptEl.textContent = '';
     }
-    userTranscriptEl.textContent += text + '\n';
+    userTranscriptEl.textContent += `${text}\n`;
     userTranscriptEl.scrollTop = userTranscriptEl.scrollHeight;
 }
 
@@ -79,31 +68,23 @@ function updateAITranscript(text) {
         aiTranscriptEl.classList.remove('empty');
         aiTranscriptEl.textContent = '';
     }
-    aiTranscriptEl.textContent += text + '\n';
+    aiTranscriptEl.textContent += `${text}\n`;
     aiTranscriptEl.scrollTop = aiTranscriptEl.scrollHeight;
 }
 
 function updateStreamingAITranscript(text) {
-    // Update only the currently streaming response
     if (aiTranscriptEl.classList.contains('empty')) {
         aiTranscriptEl.classList.remove('empty');
         aiTranscriptEl.textContent = '';
     }
-    
     const lines = aiTranscriptEl.textContent.split('\n');
-    
-    // If we're streaming, replace the last line; otherwise append new line
     if (isStreaming && lines.length > 0 && lines[lines.length - 1].startsWith('Ishmael:')) {
         lines[lines.length - 1] = text;
+    } else if (aiTranscriptEl.textContent && !aiTranscriptEl.textContent.endsWith('\n')) {
+        lines.push(text);
     } else {
-        // Append as new line
-        if (aiTranscriptEl.textContent && !aiTranscriptEl.textContent.endsWith('\n')) {
-            lines.push(text);
-        } else {
-            lines[lines.length - 1] = text;
-        }
+        lines[lines.length - 1] = text;
     }
-    
     aiTranscriptEl.textContent = lines.join('\n');
     aiTranscriptEl.scrollTop = aiTranscriptEl.scrollHeight;
 }
@@ -396,17 +377,12 @@ function handleDataChannelMessage(msg) {
             'what i like', 'what do i like', 'my interests', 'my interest',
             'my requirements', 'my requirement', 'what i want', 'my needs'
         ];
-        
-        const hasSummaryKeyword = summaryKeywords.some(keyword => lowerTranscript.includes(keyword));
-        
-        if (hasSummaryKeyword && !summaryInProgress) {
-            console.log('\ud83d\udea8 Summary keyword detected in user speech:', transcript);
-            console.log('\u23f3 Waiting 2 seconds to see if OpenAI calls function...');
-            
-            // Wait 2 seconds - if OpenAI doesn't call the function, we do it ourselves
+        if (summaryKeywords.some(keyword => lowerTranscript.includes(keyword)) && !summaryInProgress) {
+            console.log('🚨 Summary keyword detected in user speech:', transcript);
+            console.log('⏳ Waiting 2 seconds to see if OpenAI calls function...');
             setTimeout(() => {
                 if (!summaryInProgress) {
-                    console.log('\ud83d\udd04 OpenAI didn\'t call function, triggering manually...');
+                    console.log('🔄 OpenAI didn\'t call function, triggering manually...');
                     handleFunctionCall('generate_conversation_summary', {session_id: sessionId}, null);
                 }
             }, 2000);

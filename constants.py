@@ -1,18 +1,35 @@
-"""OpenAI and AI Agent Configuration"""
+"""OpenAI and Mahindra AI Agent Global Configuration"""
 
-# OpenAI API Configuration
+__all__ = [
+    "DEFAULT_REALTIME_MODEL",
+    "DEFAULT_VOICE",
+    "DEFAULT_TRANSCRIBE_MODEL",
+    "DEFAULT_MODALITIES",
+    "OPENAI_BASE_URL",
+    "OPENAI_BETA_HEADER_VALUE",
+    "AI_AGENT_NAME",
+    "AI_AGENT_ROLE",
+    "SYSTEM_INSTRUCTIONS",
+    "VAD_CONFIG",
+    "MODEL_TEMPERATURE",
+    "TOOL_DEFINITIONS",
+    "get_realtime_session_url",
+    "get_session_payload"
+]
+
+# --- OpenAI API Configuration ---
 DEFAULT_REALTIME_MODEL = "gpt-4o-realtime-preview-2024-12-17"
 DEFAULT_VOICE = "echo"
 DEFAULT_TRANSCRIBE_MODEL = "whisper-1"
-DEFAULT_MODALITIES = ["text", "audio"]
+DEFAULT_MODALITIES = ("text", "audio")  # Tuple for immutability
 OPENAI_BASE_URL = "https://api.openai.com"
 OPENAI_BETA_HEADER_VALUE = "realtime=v1"
 
-# AI Agent Identity
+# --- AI Agent Identity ---
 AI_AGENT_NAME = "Ishmael"
 AI_AGENT_ROLE = "Mahindra Automotive Sales Consultant"
 
-# AI Behaviour
+# --- System/AI Behaviour Instructions ---
 SYSTEM_INSTRUCTIONS = f"""You are {AI_AGENT_NAME}, a professional sales consultant at Mahindra, India's leading automotive company.
 
 **Your Identity:**
@@ -110,12 +127,16 @@ NOT: "Yes, based on our conversation..." ← DON'T DO THIS
 
 Remember: You are {AI_AGENT_NAME} from Mahindra. Your goal is to help customers find the vehicle that will enhance their life - whether it's adventure with the Thar, family safety with XUV700, or sustainable driving with XUV400 Electric. Be their guide to Mahindra excellence."""
 
-
-# Configuration
-VAD_CONFIG = {"type": "server_vad", "threshold": 0.5, "prefix_padding_ms": 200, "silence_duration_ms": 500}
+# --- Configuration ---
+VAD_CONFIG = {
+    "type": "server_vad",
+    "threshold": 0.5,
+    "prefix_padding_ms": 200,
+    "silence_duration_ms": 500
+}
 MODEL_TEMPERATURE = 0.8
 
-# OpenAI Function/Tool Definitions
+# --- OpenAI Function/Tool Definitions ---
 TOOL_DEFINITIONS = [
     {
         "type": "function",
@@ -164,16 +185,16 @@ TOOL_DEFINITIONS = [
     }
 ]
 
-# Helper Functions
+# --- Helper Functions ---
 def get_realtime_session_url():
-    """Return the OpenAI Realtime API session endpoint URL"""
+    """Return the OpenAI Realtime API session endpoint URL."""
     return f"{OPENAI_BASE_URL}/v1/realtime/sessions"
 
 def get_session_payload():
-    """Generate the complete session payload for OpenAI Realtime API"""
+    """Generate the complete session payload for OpenAI Realtime API."""
     return {
         "model": DEFAULT_REALTIME_MODEL,
-        "modalities": DEFAULT_MODALITIES,
+        "modalities": list(DEFAULT_MODALITIES),
         "voice": DEFAULT_VOICE,
         "instructions": SYSTEM_INSTRUCTIONS,
         "turn_detection": VAD_CONFIG,

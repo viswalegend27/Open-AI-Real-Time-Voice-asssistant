@@ -1,10 +1,10 @@
 """Conversation intelligence analyzer and recommendation engine"""
 
-from assistant.models import Conversation, Message, UserPreference, VehicleInterest, Recommendation, ConversationSummary
 import re
 import os
 import json
 from dotenv import load_dotenv
+from assistant.models import Conversation, Message, UserPreference, VehicleInterest, Recommendation, ConversationSummary
 
 load_dotenv()
 
@@ -15,6 +15,7 @@ try:
 except ImportError:
     OPENAI_CLIENT = None
 
+# Mahindra vehicle feature index
 MAHINDRA_VEHICLES = {
     'XUV700': {'type': 'SUV', 'segment': 'premium', 'features': ['luxury', 'tech', 'safety', 'family', 'spacious']},
     'Scorpio-N': {'type': 'SUV', 'segment': 'premium', 'features': ['powerful', 'rugged', 'commanding', 'spacious']},
@@ -37,11 +38,10 @@ def analyze_conversation(session_id):
     try:
         conv = Conversation.objects.get(session_id=session_id)
         messages = conv.messages.all()
-        
         user_messages = [m.content.lower() for m in messages if m.role == 'user']
-        all_text = ' '.join(user_messages)
+        all_text = " ".join(user_messages)
         
-        budget_match = re.search(r'(\d+)\s*(lakh|lakhs|l)', all_text)
+        budget_match = re.search(r"(\d+)\s*(lakh|lakhs|l)", all_text)
         if budget_match:
             UserPreference.objects.get_or_create(
                 conversation=conv,
@@ -49,24 +49,19 @@ def analyze_conversation(session_id):
                 defaults={'value': budget_match.group(0), 'confidence': 0.8}
             )
         
-        if any(word in all_text for word in ['family', 'kids', 'children', 'parents']):
-            UserPreference.objects.get_or_create(
-                conversation=conv,
-                preference_type='usage',
-                defaults={'value': 'family', 'confidence': 0.7}
-            )
-        elif any(word in all_text for word in ['adventure', 'offroad', 'trek', 'travel']):
-            UserPreference.objects.get_or_create(
-                conversation=conv,
-                preference_type='usage',
-                defaults={'value': 'adventure', 'confidence': 0.7}
-            )
-        elif any(word in all_text for word in ['city', 'urban', 'commute']):
-            UserPreference.objects.get_or_create(
-                conversation=conv,
-                preference_type='usage',
-                defaults={'value': 'city', 'confidence': 0.7}
-            )
+        usage_keywords = [
+            (['family', 'kids', 'children', 'parents'], 'family'),
+            (['adventure', 'offroad', 'trek', 'travel'], 'adventure'),
+            (['city', 'urban', 'commute'], 'city'),
+        ]
+        for keywords, usage_value in usage_keywords:
+            if any(word in all_text for word in keywords):
+                UserPreference.objects.get_or_create(
+                    conversation=conv,
+                    preference_type='usage',
+                    defaults={'value': usage_value, 'confidence': 0.7}
+                )
+                break
         
         for vehicle, data in MAHINDRA_VEHICLES.items():
             if vehicle.lower() in all_text:
@@ -94,23 +89,19 @@ def get_recommendations(session_id):
         conv = Conversation.objects.get(session_id=session_id)
         prefs = conv.preferences.all()
         interests = conv.vehicle_interests.all()
-        
+
         recommendations = []
-        
         usage = prefs.filter(preference_type='usage').first()
         if usage:
             for vehicle, data in MAHINDRA_VEHICLES.items():
                 score = 0
                 matched_features = []
-                
                 if usage.value in data['features']:
                     score += 30
                     matched_features.append(usage.value)
-                
-                if interests.filter(vehicle_name=vehicle).exists():
-                    interest_obj = interests.get(vehicle_name=vehicle)
+                interest_obj = interests.filter(vehicle_name=vehicle).first()
+                if interest_obj:
                     score += interest_obj.interest_level * 5
-                
                 if usage.value == 'adventure' and data['type'] == 'SUV':
                     score += 20
                 elif usage.value == 'city' and data['segment'] == 'compact':
@@ -118,7 +109,6 @@ def get_recommendations(session_id):
                 elif usage.value == 'family' and 'spacious' in data['features']:
                     score += 20
                     matched_features.append('spacious')
-                
                 if score > 20:
                     Recommendation.objects.update_or_create(
                         conversation=conv,
@@ -130,7 +120,6 @@ def get_recommendations(session_id):
                         }
                     )
                     recommendations.append({'vehicle': vehicle, 'score': score})
-        
         return {'status': 'success', 'recommendations': sorted(recommendations, key=lambda x: x['score'], reverse=True)}
     except Exception as e:
         return {'status': 'error', 'message': str(e)}
@@ -151,19 +140,15 @@ def save_message(session_id, role, content, user_id=None):
         session_id=session_id,
         defaults={'user_id': user_id}
     )
-    
     Message.objects.create(
         conversation=conv,
         role=role,
         content=content
     )
-    
     conv.total_messages += 1
     conv.save()
-    
     if conv.total_messages % 3 == 0:
         analyze_conversation(session_id)
-    
     return {'status': 'success', 'message_count': conv.total_messages}
 
 def generate_conversation_summary(session_id):

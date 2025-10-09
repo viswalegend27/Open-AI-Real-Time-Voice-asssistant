@@ -9,6 +9,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import constants as C
 
+# Initialize dotenv/config/env only once at startup
 load_dotenv()
 logger = logging.getLogger(__name__)
 
@@ -25,30 +26,31 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 def read_root(request):
     """Serve main interface"""
     html_file = STATIC_DIR / "index_new.html"
-    return FileResponse(open(html_file, 'rb')) if html_file.exists() else JsonResponse({"error": "HTML not found"}, status=404)
+    if html_file.exists():
+        return FileResponse(open(html_file, 'rb'))
+    return JsonResponse({"error": "HTML not found"}, status=404)
 
 
 @csrf_exempt
 def create_realtime_session(request):
     """Create OpenAI session"""
-    payload = C.get_session_payload() # session payload recieved
+    payload = C.get_session_payload()
     payload.update({"model": OPENAI_MODEL, "voice": OPENAI_VOICE, "input_audio_transcription": {"model": OPENAI_TRANSCRIBE}})
-    
     logger.info(f"Creating session | model={OPENAI_MODEL} | voice={OPENAI_VOICE}")
-    
     try:
-        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json", "OpenAI-Beta": C.OPENAI_BETA_HEADER_VALUE}
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+            "OpenAI-Beta": C.OPENAI_BETA_HEADER_VALUE
+        }
         with httpx.Client(timeout=20.0) as client:
             response = client.post(C.get_realtime_session_url(), headers=headers, json=payload)
-        
         if response.status_code != 200:
             logger.error(f"OpenAI error ({response.status_code}): {response.text}")
             return JsonResponse({"detail": f"Session error: {response.text}"}, status=response.status_code)
-        
         data = response.json()
         logger.info(f"Session created | id={data.get('id')}")
         return JsonResponse(data)
-        
     except Exception as e:
         logger.error(f"Session creation failed: {e}", exc_info=True)
         return JsonResponse({"detail": str(e)}, status=500)
@@ -64,16 +66,11 @@ def save_conversation(request):
     """Save conversation message"""
     import json
     from assistant.analyzer import save_message
-    
     try:
         data = json.loads(request.body)
-        session_id = data.get('session_id')
-        role = data.get('role')
-        content = data.get('content')
-        
-        if not all([session_id, role, content]):
+        session_id, role, content = data.get('session_id'), data.get('role'), data.get('content')
+        if not (session_id and role and content):
             return JsonResponse({"error": "Missing required fields"}, status=400)
-        
         result = save_message(session_id, role, content)
         return JsonResponse(result)
     except Exception as e:
@@ -84,11 +81,9 @@ def save_conversation(request):
 def get_analysis(request):
     """Get conversation analysis"""
     from assistant.analyzer import analyze_conversation
-    
     session_id = request.GET.get('session_id')
     if not session_id:
         return JsonResponse({"error": "session_id required"}, status=400)
-    
     result = analyze_conversation(session_id)
     return JsonResponse(result)
 
@@ -97,11 +92,9 @@ def get_analysis(request):
 def get_recommendations(request):
     """Get vehicle recommendations"""
     from assistant.analyzer import get_recommendations as get_recs
-    
     session_id = request.GET.get('session_id')
     if not session_id:
         return JsonResponse({"error": "session_id required"}, status=400)
-    
     result = get_recs(session_id)
     return JsonResponse(result)
 
@@ -110,39 +103,29 @@ def generate_summary(request):
     """Generate AI-powered conversation summary"""
     from assistant.analyzer import generate_conversation_summary
     import json
-    
-    # Get session_id from GET, POST params, or request body
+    # Accept session_id from GET, POST, or request body
     session_id = request.GET.get('session_id') or request.POST.get('session_id')
-    
     if not session_id and request.body:
         try:
             body_data = json.loads(request.body)
             session_id = body_data.get('session_id')
-        except:
+        except Exception:
             pass
-    
     if not session_id:
         return JsonResponse({"error": "session_id required"}, status=400)
-    
     result = generate_conversation_summary(session_id)
-    
-    # If successful, include the formatted summary for easy display
     if result.get('status') == 'success' and result.get('formatted_summary'):
         result['display_text'] = result['formatted_summary']
-    
     return JsonResponse(result)
 
 @csrf_exempt
 def get_summary(request, session_id):
     """Retrieve existing conversation summary"""
     from assistant.models import Conversation
-    
     try:
         conv = Conversation.objects.get(session_id=session_id)
-        
-        # Check if summary exists
-        if hasattr(conv, 'summary'):
-            summary = conv.summary
+        summary = getattr(conv, 'summary', None)
+        if summary:
             return JsonResponse({
                 "status": "success",
                 "summary": {
@@ -167,11 +150,9 @@ def get_summary(request, session_id):
                     "total_messages": conv.total_messages
                 }
             })
-        else:
-            return JsonResponse({
-                "status": "not_found",
-                "message": "Summary not generated yet. Call /api/generate-summary/ first."
-            }, status=404)
-            
+        return JsonResponse({
+            "status": "not_found",
+            "message": "Summary not generated yet. Call /api/generate-summary/ first."
+        }, status=404)
     except Conversation.DoesNotExist:
         return JsonResponse({"error": "Conversation not found"}, status=404)
