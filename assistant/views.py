@@ -27,7 +27,7 @@ def read_root(request):
 @csrf_exempt
 def create_realtime_session(request):
     """Create OpenAI session"""
-    payload = C.get_session_payload()
+    payload = C.get_session_payload() # session payload recieved
     payload.update({"model": OPENAI_MODEL, "voice": OPENAI_VOICE, "input_audio_transcription": {"model": OPENAI_TRANSCRIBE}})
     
     logger.info(f"Creating session | model={OPENAI_MODEL} | voice={OPENAI_VOICE}")
