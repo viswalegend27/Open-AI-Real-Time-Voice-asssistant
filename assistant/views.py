@@ -1,9 +1,13 @@
+"""Views for Mahindra Voice Assistant API endpoints"""
+
 from django.http import JsonResponse, FileResponse
 from django.views.decorators.csrf import csrf_exempt
-import os, httpx, logging
-import constants as C
+import os
+import httpx
+import logging
 from pathlib import Path
 from dotenv import load_dotenv
+import constants as C
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -53,3 +57,50 @@ def create_realtime_session(request):
 def health_check(request):
     """Health check"""
     return JsonResponse({"status": "ok", "agent": C.AI_AGENT_NAME, "model": OPENAI_MODEL, "voice": OPENAI_VOICE})
+
+
+@csrf_exempt
+def save_conversation(request):
+    """Save conversation message"""
+    import json
+    from assistant.analyzer import save_message
+    
+    try:
+        data = json.loads(request.body)
+        session_id = data.get('session_id')
+        role = data.get('role')
+        content = data.get('content')
+        
+        if not all([session_id, role, content]):
+            return JsonResponse({"error": "Missing required fields"}, status=400)
+        
+        result = save_message(session_id, role, content)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+def get_analysis(request):
+    """Get conversation analysis"""
+    from assistant.analyzer import analyze_conversation
+    
+    session_id = request.GET.get('session_id')
+    if not session_id:
+        return JsonResponse({"error": "session_id required"}, status=400)
+    
+    result = analyze_conversation(session_id)
+    return JsonResponse(result)
+
+
+@csrf_exempt
+def get_recommendations(request):
+    """Get vehicle recommendations"""
+    from assistant.analyzer import get_recommendations as get_recs
+    
+    session_id = request.GET.get('session_id')
+    if not session_id:
+        return JsonResponse({"error": "session_id required"}, status=400)
+    
+    result = get_recs(session_id)
+    return JsonResponse(result)

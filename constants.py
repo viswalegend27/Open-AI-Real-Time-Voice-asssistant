@@ -1,8 +1,6 @@
-# OpenAI Configuration
-"""
---> Holds down the model's Configuration
+"""OpenAI and AI Agent Configuration"""
 
-"""
+# OpenAI API Configuration
 DEFAULT_REALTIME_MODEL = "gpt-4o-realtime-preview-2024-12-17"
 DEFAULT_VOICE = "echo"
 DEFAULT_TRANSCRIBE_MODEL = "whisper-1"
@@ -10,11 +8,7 @@ DEFAULT_MODALITIES = ["text", "audio"]
 OPENAI_BASE_URL = "https://api.openai.com"
 OPENAI_BETA_HEADER_VALUE = "realtime=v1"
 
-# AI Agent
-"""
---> Assistant identity and role is defined down below
-
-"""
+# AI Agent Identity
 AI_AGENT_NAME = "Ishmael"
 AI_AGENT_ROLE = "Mahindra Automotive Sales Consultant"
 
@@ -101,20 +95,47 @@ Remember: You are {AI_AGENT_NAME} from Mahindra. Your goal is to help customers 
 VAD_CONFIG = {"type": "server_vad", "threshold": 0.5, "prefix_padding_ms": 200, "silence_duration_ms": 500}
 MODEL_TEMPERATURE = 0.8
 
+# OpenAI Function/Tool Definitions
+TOOL_DEFINITIONS = [
+    {
+        "type": "function",
+        "name": "get_user_recommendations",
+        "description": "Analyze user's conversation and provide personalized vehicle recommendations based on their stated needs, budget, and preferences.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "The current conversation session ID"
+                }
+            },
+            "required": ["session_id"]
+        }
+    },
+    {
+        "type": "function",
+        "name": "analyze_user_needs",
+        "description": "Extract and analyze user's vehicle requirements from the conversation (budget, usage type, features needed).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "The current conversation session ID"
+                }
+            },
+            "required": ["session_id"]
+        }
+    }
+]
+
 # Helper Functions
 def get_realtime_session_url():
-    """ 
---> Return the full-endpoint URL 
-    
-    """
+    """Return the OpenAI Realtime API session endpoint URL"""
     return f"{OPENAI_BASE_URL}/v1/realtime/sessions"
 
-"""
---> Payload information that is send to OpenAI.
---> In simple terms used for sending our AI information through Realtime to OpenAI
-
-"""
 def get_session_payload():
+    """Generate the complete session payload for OpenAI Realtime API"""
     return {
         "model": DEFAULT_REALTIME_MODEL,
         "modalities": DEFAULT_MODALITIES,
@@ -123,4 +144,5 @@ def get_session_payload():
         "turn_detection": VAD_CONFIG,
         "input_audio_transcription": {"model": DEFAULT_TRANSCRIBE_MODEL},
         "temperature": MODEL_TEMPERATURE,
+        "tools": TOOL_DEFINITIONS,
     }

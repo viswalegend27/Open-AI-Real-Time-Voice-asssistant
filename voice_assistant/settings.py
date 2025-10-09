@@ -23,12 +23,23 @@ MIDDLEWARE = [
 ROOT_URLCONF = 'voice_assistant.urls'
 WSGI_APPLICATION = 'voice_assistant.wsgi.application'
 
+# Database
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+}
+
 # CORS
 CORS_ALLOW_ALL_ORIGINS = True
 
 # Static files
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+
+# Primary key field type
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Logging
 LOGGING = {

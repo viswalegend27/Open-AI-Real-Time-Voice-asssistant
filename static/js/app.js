@@ -12,6 +12,28 @@ let dataChannel = null;
 let audioStream = null;
 let currentAIResponse = '';
 let isStreaming = false;
+let sessionId = null;
+
+// Generate unique session ID
+function generateSessionId() {
+    return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+// Save message to database
+async function saveMessageToDatabase(role, content) {
+    if (!sessionId || !content) return;
+    
+    try {
+        await fetch('/api/conversation', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({session_id: sessionId, role: role, content: content})
+        });
+        console.log(`💾 Saved ${role} message to database`);
+    } catch (e) {
+        console.error('Failed to save message:', e);
+    }
+}
 
 // ==========================================
 // Status Update
@@ -91,6 +113,8 @@ function updateStreamingAITranscript(text) {
 async function startConversation() {
     try {
         startBtn.disabled = true;
+        sessionId = generateSessionId();
+        console.log('🆔 Session ID:', sessionId);
         updateStatus('Connecting to Mahindra assistant...', 'info');
 
         // 1. Request ephemeral token from our backend
@@ -237,6 +261,8 @@ function handleDataChannelMessage(msg) {
     if (type === 'conversation.item.input_audio_transcription.completed') {
         const transcript = msg.transcript || '';
         updateUserTranscript(`You: ${transcript}`);
+        // Save user message to database
+        saveMessageToDatabase('user', transcript);
     }
 
     // AI response started - clear previous response buffer and mark as streaming
@@ -267,6 +293,8 @@ function handleDataChannelMessage(msg) {
         // Finalize the transcript
         if (transcript) {
             updateStreamingAITranscript(`Ishmael: ${transcript}`);
+            // Save AI message to database
+            saveMessageToDatabase('assistant', transcript);
         }
         
         // Add newline to separate from next response
