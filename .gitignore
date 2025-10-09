@@ -1,4 +1,7 @@
 .env
 notes.txt
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
 **/__pycache__/
