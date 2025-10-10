@@ -2,8 +2,10 @@
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const statusEl = document.getElementById('status');
+// Used to set user and AI transcripts
 const userTranscriptEl = document.getElementById('userTranscript');
 const aiTranscriptEl = document.getElementById('aiTranscript');
+// Used to set AI audio output
 const aiAudioEl = document.getElementById('aiAudio');
 
 let peerConnection = null;
@@ -101,44 +103,40 @@ async function startConversation() {
         updateStatus('Connecting to Mahindra assistant...', 'info');
 
         // 1. Request ephemeral token from our backend
-        // 4. Response object is set to recieve payload
         const response = await fetch('/api/session');
         if (!response.ok) {
             throw new Error(`Failed to get session: ${response.status}`);
         }
         
-        // Storing the response as it is in original format
+        // 2. Store the session key (ephemeral client secret) from the backend's response
         const data = await response.json();
-        // 6. Session key recieved
         const EPHEMERAL_KEY = data.client_secret.value;
 
         updateStatus('Preparing consultation session...', 'info');
 
-        // 2. Create RTCPeerConnection
+        // 3. Create RTCPeerConnection
         peerConnection = new RTCPeerConnection();
 
-        // 3. Set up audio element for receiving AI voice
+        // 4. Set up audio element for receiving AI voice
         const audioEl = aiAudioEl;
         audioEl.autoplay = true;
 
+        // 5. On receiving audio track from OpenAI, play it via the audio element
         peerConnection.ontrack = (event) => {
             console.log('Received audio track from OpenAI');
-            // 2 Comming audio stream over WebRTC and assigned to this object
             audioEl.srcObject = event.streams[0];
         };
 
-        // 4. Add local microphone audio track
+        // 6. Add local microphone audio track (user's voice) to WebRTC
         updateStatus('Requesting microphone access...', 'warning');
-        // Capturing user audio
         audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
         const audioTrack = audioStream.getAudioTracks()[0];
-        peerConnection.addTrack(audioTrack); // Our user's audio track is transferred to webRTC
+        peerConnection.addTrack(audioTrack);
         console.log('Added local audio track');
 
         updateStatus('Connecting to Ishmael...', 'info');
 
-        // 5. Set up data channel for events
+        // 7. Set up data channel for events (text, transcript, function calls)
         dataChannel = peerConnection.createDataChannel('oai-events');
         
         dataChannel.addEventListener('open', () => {
@@ -147,12 +145,11 @@ async function startConversation() {
             stopBtn.disabled = false;
         });
 
-        // Here our Transcripts data is recieved as JSON format
+        // 8. Data channel: handle messages (e.g. transcript, AI events)
         dataChannel.addEventListener('message', (event) => {
             try {
                 const msg = JSON.parse(event.data);
                 console.log('Data channel message:', msg);
-                // Function called is called to give out the transcripts
                 handleDataChannelMessage(msg);
             } catch (e) {
                 console.error('Error parsing data channel message:', e);
@@ -169,19 +166,17 @@ async function startConversation() {
             updateStatus('Connection error - please try again', 'error');
         });
 
-        // 6. Create and set local offer
+        // 9. Create and set local offer (start WebRTC negotiation)
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
 
-        // 7. Send offer to OpenAI Realtime API
+        // 10. Send offer (SDP) to OpenAI Realtime API and get the answer
         const baseUrl = 'https://api.openai.com/v1/realtime';
         const model = 'gpt-4o-realtime-preview-2024-12-17';
-        // 7 Response recieved is directly sent to Open_AI
         const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
             method: 'POST',
             body: offer.sdp,
             headers: {
-                // Authorization token
                 'Authorization': `Bearer ${EPHEMERAL_KEY}`,
                 'Content-Type': 'application/sdp'
             },
@@ -191,13 +186,12 @@ async function startConversation() {
             throw new Error(`OpenAI SDP exchange failed: ${sdpResponse.status}`);
         }
 
+        // 11. Set remote description (complete WebRTC connection)
         const answerSdp = await sdpResponse.text();
         const answer = {
             type: 'answer',
             sdp: answerSdp,
         };
-
-        // 8. Set remote description
         await peerConnection.setRemoteDescription(answer);
         console.log('WebRTC connection established - Mahindra sales consultant ready');
 
