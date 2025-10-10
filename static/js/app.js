@@ -2,6 +2,7 @@
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const statusEl = document.getElementById('status');
+// Used to set User transcript
 const userTranscriptEl = document.getElementById('userTranscript');
 const aiTranscriptEl = document.getElementById('aiTranscript');
 // Used to set AI transcript
