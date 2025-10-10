@@ -4,7 +4,10 @@ import re
 import os
 import json
 from dotenv import load_dotenv
-from assistant.models import Conversation, Message, UserPreference, VehicleInterest, Recommendation, ConversationSummary
+from assistant.models import (
+    Conversation, Message, UserPreference, VehicleInterest, Recommendation, ConversationSummary
+)
+from django.utils import timezone
 
 load_dotenv()
 
@@ -27,20 +30,16 @@ MAHINDRA_VEHICLES = {
 }
 
 def analyze_conversation(session_id):
-    """Analyze conversation to extract budget, preferences, and vehicle interests
-    
-    Args:
-        session_id: Unique conversation session identifier
-        
-    Returns:
-        dict: Status and count of preferences extracted
+    """
+    Analyze conversation to extract user's budget, preferences, and vehicle interests.
     """
     try:
         conv = Conversation.objects.get(session_id=session_id)
         messages = conv.messages.all()
         user_messages = [m.content.lower() for m in messages if m.role == 'user']
         all_text = " ".join(user_messages)
-        
+
+        # Extract budget
         budget_match = re.search(r"(\d+)\s*(lakh|lakhs|l)", all_text)
         if budget_match:
             UserPreference.objects.get_or_create(
@@ -48,7 +47,8 @@ def analyze_conversation(session_id):
                 preference_type='budget',
                 defaults={'value': budget_match.group(0), 'confidence': 0.8}
             )
-        
+
+        # Extract use case
         usage_keywords = [
             (['family', 'kids', 'children', 'parents'], 'family'),
             (['adventure', 'offroad', 'trek', 'travel'], 'adventure'),
@@ -62,8 +62,9 @@ def analyze_conversation(session_id):
                     defaults={'value': usage_value, 'confidence': 0.7}
                 )
                 break
-        
-        for vehicle, data in MAHINDRA_VEHICLES.items():
+
+        # Extract vehicle interest
+        for vehicle in MAHINDRA_VEHICLES:
             if vehicle.lower() in all_text:
                 interest = all_text.count(vehicle.lower())
                 VehicleInterest.objects.update_or_create(
@@ -71,70 +72,14 @@ def analyze_conversation(session_id):
                     vehicle_name=vehicle,
                     defaults={'interest_level': min(10, interest * 3 + 5)}
                 )
-        
+
         return {'status': 'success', 'preferences_extracted': conv.preferences.count()}
     except Exception as e:
         return {'status': 'error', 'message': str(e)}
 
-def get_recommendations(session_id):
-    """Generate vehicle recommendations based on extracted preferences
-    
-    Args:
-        session_id: Unique conversation session identifier
-        
-    Returns:
-        dict: Status and list of recommended vehicles with scores
-    """
-    try:
-        conv = Conversation.objects.get(session_id=session_id)
-        prefs = conv.preferences.all()
-        interests = conv.vehicle_interests.all()
-
-        recommendations = []
-        usage = prefs.filter(preference_type='usage').first()
-        if usage:
-            for vehicle, data in MAHINDRA_VEHICLES.items():
-                score = 0
-                matched_features = []
-                if usage.value in data['features']:
-                    score += 30
-                    matched_features.append(usage.value)
-                interest_obj = interests.filter(vehicle_name=vehicle).first()
-                if interest_obj:
-                    score += interest_obj.interest_level * 5
-                if usage.value == 'adventure' and data['type'] == 'SUV':
-                    score += 20
-                elif usage.value == 'city' and data['segment'] == 'compact':
-                    score += 25
-                elif usage.value == 'family' and 'spacious' in data['features']:
-                    score += 20
-                    matched_features.append('spacious')
-                if score > 20:
-                    Recommendation.objects.update_or_create(
-                        conversation=conv,
-                        vehicle_name=vehicle,
-                        defaults={
-                            'match_score': score,
-                            'reason': f"Matches your {usage.value} needs",
-                            'features_matched': matched_features
-                        }
-                    )
-                    recommendations.append({'vehicle': vehicle, 'score': score})
-        return {'status': 'success', 'recommendations': sorted(recommendations, key=lambda x: x['score'], reverse=True)}
-    except Exception as e:
-        return {'status': 'error', 'message': str(e)}
-
 def save_message(session_id, role, content, user_id=None):
-    """Save conversation message and trigger analysis every 3 messages
-    
-    Args:
-        session_id: Unique conversation session identifier
-        role: Message role (user/assistant)
-        content: Message content
-        user_id: Optional user identifier
-        
-    Returns:
-        dict: Status and current message count
+    """
+    Save conversation message and trigger analysis every 3 messages.
     """
     conv, created = Conversation.objects.get_or_create(
         session_id=session_id,
@@ -152,32 +97,27 @@ def save_message(session_id, role, content, user_id=None):
     return {'status': 'success', 'message_count': conv.total_messages}
 
 def generate_conversation_summary(session_id):
-    """Generate AI-powered conversation summary with key details
-    
-    Args:
-        session_id: Unique conversation session identifier
-        
-    Returns:
-        dict: Status and summary data
+    """
+    Generate AI-powered conversation summary with key details.
     """
     try:
         conv = Conversation.objects.get(session_id=session_id)
         messages = conv.messages.all().order_by('timestamp')
-        
+
         if messages.count() == 0:
             return {'status': 'error', 'message': 'No messages found'}
-        
+
         # Build conversation transcript
         transcript = ""
         for msg in messages:
             role_label = "Customer" if msg.role == "user" else "Ishmael"
             transcript += f"{role_label}: {msg.content}\n\n"
-        
+
         # Get existing analysis data
         preferences = conv.preferences.all()
         interests = conv.vehicle_interests.all()
         recommendations = conv.recommendations.all().order_by('-match_score')
-        
+
         # Create prompt for AI summary
         prompt = f"""You are analyzing a completed sales conversation. Extract key information and insights.
 
@@ -207,8 +147,8 @@ RULES:
 - recommended_vehicles should only include vehicles the customer showed interest in
 - next_actions should be practical and specific
 - Focus on what the customer WANTS, not what Ishmael said"""
-        
-        # Generate summary using OpenAI
+
+        # Generate summary using OpenAI or fallback
         if OPENAI_CLIENT:
             response = OPENAI_CLIENT.chat.completions.create(
                 model="gpt-4o-mini",
@@ -219,10 +159,8 @@ RULES:
                 temperature=0.3,
                 response_format={"type": "json_object"}
             )
-            
             summary_data = json.loads(response.choices[0].message.content)
         else:
-            # Fallback summary if OpenAI not available
             summary_data = {
                 "summary": f"Conversation with {messages.count()} messages. Customer showed interest in Mahindra vehicles.",
                 "customer_name": None,
@@ -237,9 +175,9 @@ RULES:
                 "engagement_score": 7,
                 "purchase_intent": "medium"
             }
-        
+
         # Save summary to database
-        summary, created = ConversationSummary.objects.update_or_create(
+        summary, _ = ConversationSummary.objects.update_or_create(
             conversation=conv,
             defaults={
                 'summary_text': summary_data.get('summary', ''),
@@ -256,61 +194,51 @@ RULES:
                 'purchase_intent': summary_data.get('purchase_intent')
             }
         )
-        
+
         # Mark conversation as ended
-        from django.utils import timezone
         if not conv.ended_at:
             conv.ended_at = timezone.now()
             conv.save()
-        
+
         # Create a user-friendly formatted summary
         formatted_summary = format_summary_for_user(summary_data, conv, preferences, interests, recommendations)
-        
+
         return {
             'status': 'success',
             'summary': summary_data,
             'summary_id': summary.id,
-            'formatted_summary': formatted_summary  # Add user-friendly version
+            'formatted_summary': formatted_summary
         }
-        
+
     except Exception as e:
         return {'status': 'error', 'message': str(e)}
 
 def format_summary_for_user(summary_data, conversation, preferences, interests, recommendations):
-    """Format a concise, conversational summary
-    
-    Args:
-        summary_data: AI-generated summary dictionary
-        conversation: Conversation object
-        preferences: QuerySet of UserPreference objects
-        interests: QuerySet of VehicleInterest objects
-        recommendations: QuerySet of Recommendation objects
-        
-    Returns:
-        str: Brief conversational summary
+    """
+    Format a concise, conversational summary for the UI.
     """
     parts = []
-    
+
     # Budget
     budget_pref = preferences.filter(preference_type='budget').first()
     budget = budget_pref.value if budget_pref else summary_data.get('budget_range')
     if budget:
         parts.append(f"Budget: {budget}")
-    
+
     # Use case
     usage_pref = preferences.filter(preference_type='usage').first()
     use_case = usage_pref.value if usage_pref else summary_data.get('use_case')
     if use_case:
         parts.append(f"Use: {use_case}")
-    
+
     # Interested vehicles
     if interests.exists():
         vehicles = [interest.vehicle_name for interest in interests.order_by('-interest_level')[:2]]
         parts.append(f"Interested in: {', '.join(vehicles)}")
-    
+
     # Top recommendation
     if recommendations.exists():
         top_rec = recommendations.order_by('-match_score').first()
         parts.append(f"Top match: {top_rec.vehicle_name}")
-    
+
     return " | ".join(parts) if parts else "No preferences captured yet"

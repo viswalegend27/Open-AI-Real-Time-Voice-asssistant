@@ -56,39 +56,37 @@ function updateStatus(message, type = 'info') {
 // Update Transcripts
 // ==========================================
 // === > Below code functionalities used for our Transcript updation in our screen
-function updateUserTranscript(text) {
-    if (userTranscriptEl.classList.contains('empty')) {
-        userTranscriptEl.classList.remove('empty');
-        userTranscriptEl.textContent = '';
+// Utility for clearing class/placeholder and appending text
+function _updateTranscript(el, text, isStreaming, streamingPrefix = "") {
+    if (el.classList.contains('empty')) {
+        el.classList.remove('empty');
+        el.textContent = '';
     }
-    userTranscriptEl.textContent += `${text}\n`;
-    userTranscriptEl.scrollTop = userTranscriptEl.scrollHeight;
-}
-
-function updateAITranscript(text) {
-    if (aiTranscriptEl.classList.contains('empty')) {
-        aiTranscriptEl.classList.remove('empty');
-        aiTranscriptEl.textContent = '';
-    }
-    aiTranscriptEl.textContent += `${text}\n`;
-    aiTranscriptEl.scrollTop = aiTranscriptEl.scrollHeight;
-}
-
-function updateStreamingAITranscript(text) {
-    if (aiTranscriptEl.classList.contains('empty')) {
-        aiTranscriptEl.classList.remove('empty');
-        aiTranscriptEl.textContent = '';
-    }
-    const lines = aiTranscriptEl.textContent.split('\n');
-    if (isStreaming && lines.length > 0 && lines[lines.length - 1].startsWith('Ishmael:')) {
-        lines[lines.length - 1] = text;
-    } else if (aiTranscriptEl.textContent && !aiTranscriptEl.textContent.endsWith('\n')) {
-        lines.push(text);
+    // Streaming logic (for AI only)
+    if (isStreaming) {
+        const lines = el.textContent.split('\n');
+        if (lines.length > 0 && lines[lines.length - 1].startsWith(streamingPrefix)) {
+            lines[lines.length - 1] = text;
+        } else if (el.textContent && !el.textContent.endsWith('\n')) {
+            lines.push(text);
+        } else {
+            lines[lines.length - 1] = text;
+        }
+        el.textContent = lines.join('\n');
     } else {
-        lines[lines.length - 1] = text;
+        el.textContent += `${text}\n`;
     }
-    aiTranscriptEl.textContent = lines.join('\n');
-    aiTranscriptEl.scrollTop = aiTranscriptEl.scrollHeight;
+    el.scrollTop = el.scrollHeight;
+}
+
+function updateUserTranscript(text) {
+    _updateTranscript(userTranscriptEl, text, false);
+}
+function updateAITranscript(text) {
+    _updateTranscript(aiTranscriptEl, text, false);
+}
+function updateStreamingAITranscript(text) {
+    _updateTranscript(aiTranscriptEl, text, true, 'Ishmael:');
 }
 
 // ==========================================
@@ -485,8 +483,9 @@ function handleDataChannelMessage(msg) {
 // ==========================================
 // Event Listeners
 // ==========================================
-startBtn.addEventListener('click', startConversation);
-stopBtn.addEventListener('click', stopConversation);
+// Prevent double registration on possible script reload
+if (!startBtn.onclick) startBtn.addEventListener('click', startConversation);
+if (!stopBtn.onclick) stopBtn.addEventListener('click', stopConversation);
 
 // Handle page unload
 window.addEventListener('beforeunload', () => {
