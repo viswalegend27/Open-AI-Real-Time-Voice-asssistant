@@ -137,37 +137,10 @@ VAD_CONFIG = {
 MODEL_TEMPERATURE = 0.8
 
 # --- OpenAI Function/Tool Definitions ---
+# The "name": "generate_conversation_summary" in TOOL_DEFINITIONSmaps to 
+# `def generate_conversation_summary(session_id):` 
+# in backend (`assistant/analyzer.py`).
 TOOL_DEFINITIONS = [
-    {
-        "type": "function",
-        "name": "get_user_recommendations",
-        "description": "Analyze user's conversation and provide personalized vehicle recommendations based on their stated needs, budget, and preferences.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "session_id": {
-                    "type": "string",
-                    "description": "The current conversation session ID"
-                }
-            },
-            "required": ["session_id"]
-        }
-    },
-    {
-        "type": "function",
-        "name": "analyze_user_needs",
-        "description": "Extract and analyze user's vehicle requirements from the conversation (budget, usage type, features needed).",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "session_id": {
-                    "type": "string",
-                    "description": "The current conversation session ID"
-                }
-            },
-            "required": ["session_id"]
-        }
-    },
     {
         "type": "function",
         "name": "generate_conversation_summary",
