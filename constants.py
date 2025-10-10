@@ -137,7 +137,7 @@ VAD_CONFIG = {
 MODEL_TEMPERATURE = 0.8
 
 # --- OpenAI Function/Tool Definitions ---
-# The "name": "generate_conversation_summary" in TOOL_DEFINITIONSmaps to 
+# The "name": "generate_conversation_summary" in TOOL_DEFINITIONS maps to 
 # `def generate_conversation_summary(session_id):` 
 # in backend (`assistant/analyzer.py`).
 TOOL_DEFINITIONS = [
