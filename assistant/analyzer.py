@@ -277,7 +277,7 @@ RULES:
         return {'status': 'error', 'message': str(e)}
 
 def format_summary_for_user(summary_data, conversation, preferences, interests, recommendations):
-    """Format the summary in a user-friendly, conversational way
+    """Format a concise, conversational summary
     
     Args:
         summary_data: AI-generated summary dictionary
@@ -287,103 +287,30 @@ def format_summary_for_user(summary_data, conversation, preferences, interests, 
         recommendations: QuerySet of Recommendation objects
         
     Returns:
-        str: Nicely formatted summary text for the user
+        str: Brief conversational summary
     """
-    lines = []
-    lines.append("\n=== 🚗 CONVERSATION SUMMARY ===")
-    lines.append("")
+    parts = []
     
-    # Main summary
-    if summary_data.get('summary'):
-        lines.append(f"📋 {summary_data['summary']}")
-        lines.append("")
+    # Budget
+    budget_pref = preferences.filter(preference_type='budget').first()
+    budget = budget_pref.value if budget_pref else summary_data.get('budget_range')
+    if budget:
+        parts.append(f"Budget: {budget}")
     
-    # Customer details
-    if summary_data.get('customer_name') or summary_data.get('contact_info'):
-        lines.append("👤 CUSTOMER DETAILS:")
-        if summary_data.get('customer_name'):
-            lines.append(f"   Name: {summary_data['customer_name']}")
-        if summary_data.get('contact_info'):
-            lines.append(f"   Contact: {summary_data['contact_info']}")
-        lines.append("")
+    # Use case
+    usage_pref = preferences.filter(preference_type='usage').first()
+    use_case = usage_pref.value if usage_pref else summary_data.get('use_case')
+    if use_case:
+        parts.append(f"Use: {use_case}")
     
-    # Requirements from database
-    if preferences.exists() or summary_data.get('budget_range') or summary_data.get('vehicle_type') or summary_data.get('use_case'):
-        lines.append("🎯 YOUR REQUIREMENTS:")
-        
-        # Budget from DB or summary
-        budget_pref = preferences.filter(preference_type='budget').first()
-        budget = budget_pref.value if budget_pref else summary_data.get('budget_range')
-        if budget:
-            lines.append(f"   💰 Budget: {budget}")
-        
-        # Vehicle type
-        if summary_data.get('vehicle_type'):
-            lines.append(f"   🚙 Vehicle Type: {summary_data['vehicle_type']}")
-        
-        # Use case from DB or summary
-        usage_pref = preferences.filter(preference_type='usage').first()
-        use_case = usage_pref.value if usage_pref else summary_data.get('use_case')
-        if use_case:
-            lines.append(f"   🎯 Primary Use: {use_case.title()}")
-        
-        # Priority features
-        if summary_data.get('priority_features'):
-            features = ', '.join(summary_data['priority_features'])
-            lines.append(f"   ⭐ Important Features: {features}")
-        
-        lines.append("")
-    
-    # Vehicle interests from database
+    # Interested vehicles
     if interests.exists():
-        lines.append("💚 VEHICLES YOU'RE INTERESTED IN:")
-        for interest in interests.order_by('-interest_level'):
-            vehicle_data = MAHINDRA_VEHICLES.get(interest.vehicle_name, {})
-            vehicle_type = vehicle_data.get('type', 'Vehicle')
-            lines.append(f"   • {interest.vehicle_name} ({vehicle_type}) - Interest Level: {interest.interest_level}/10")
-        lines.append("")
+        vehicles = [interest.vehicle_name for interest in interests.order_by('-interest_level')[:2]]
+        parts.append(f"Interested in: {', '.join(vehicles)}")
     
-    # Recommendations from database
+    # Top recommendation
     if recommendations.exists():
-        lines.append("🎖️ MY RECOMMENDATIONS FOR YOU:")
-        for idx, rec in enumerate(recommendations.order_by('-match_score')[:3], 1):
-            lines.append(f"   {idx}. {rec.vehicle_name} (Match Score: {rec.match_score:.0f}%)")
-            lines.append(f"      Reason: {rec.reason}")
-            if rec.features_matched:
-                lines.append(f"      Matched Features: {', '.join(rec.features_matched)}")
-        lines.append("")
-    elif summary_data.get('recommended_vehicles'):
-        # Fallback to AI summary if DB recommendations not available
-        lines.append("🎖️ VEHICLES DISCUSSED:")
-        for vehicle in summary_data['recommended_vehicles']:
-            lines.append(f"   • {vehicle}")
-        lines.append("")
+        top_rec = recommendations.order_by('-match_score').first()
+        parts.append(f"Top match: {top_rec.vehicle_name}")
     
-    # Next steps
-    if summary_data.get('next_actions'):
-        lines.append("📅 NEXT STEPS:")
-        for idx, action in enumerate(summary_data['next_actions'], 1):
-            lines.append(f"   {idx}. {action}")
-        lines.append("")
-    
-    # Engagement metrics
-    if summary_data.get('sentiment') or summary_data.get('purchase_intent'):
-        lines.append("📊 ENGAGEMENT INSIGHTS:")
-        if summary_data.get('sentiment'):
-            sentiment_emoji = {"positive": "😊", "neutral": "😐", "negative": "😞"}.get(summary_data['sentiment'], "")
-            lines.append(f"   Sentiment: {sentiment_emoji} {summary_data['sentiment'].title()}")
-        if summary_data.get('engagement_score'):
-            lines.append(f"   Engagement Score: {summary_data['engagement_score']}/10")
-        if summary_data.get('purchase_intent'):
-            lines.append(f"   Purchase Intent: {summary_data['purchase_intent'].title()}")
-        lines.append("")
-    
-    # Conversation stats
-    lines.append(f"💬 Total Messages: {conversation.total_messages}")
-    if conversation.ended_at:
-        duration = (conversation.ended_at - conversation.started_at).total_seconds() / 60
-        lines.append(f"⏱️ Duration: {duration:.1f} minutes")
-    
-    lines.append("\n=== END OF SUMMARY ===")
-    
-    return "\n".join(lines)
+    return " | ".join(parts) if parts else "No preferences captured yet"
