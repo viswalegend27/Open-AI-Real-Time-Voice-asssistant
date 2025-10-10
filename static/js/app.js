@@ -25,6 +25,7 @@ function generateSessionId() {
 async function saveMessageToDatabase(role, content) {
     if (!sessionId || !content) return;
     try {
+        //  [API CALL] save user or assistant message to backend
         await fetch('/api/conversation', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -102,6 +103,7 @@ async function startConversation() {
         updateStatus('Connecting to Mahindra assistant...', 'info');
 
         // 1. Request ephemeral token from our backend
+        // [API CALL] Get OpenAI ephemeral session key from backend
         const response = await fetch('/api/session');
         if (!response.ok) {
             throw new Error(`Failed to get session: ${response.status}`);
@@ -257,6 +259,7 @@ async function handleFunctionCall(functionName, args, callId) {
             console.log('📊 Calling summary API for session:', sessionId);
             
             // Call backend API to generate summary
+            // [API CALL] Request conversation summary from backend
             const response = await fetch('/api/generate-summary', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
