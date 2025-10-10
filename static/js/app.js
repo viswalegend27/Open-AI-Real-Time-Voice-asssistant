@@ -2,10 +2,9 @@
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const statusEl = document.getElementById('status');
-// Used to set user and AI transcripts
 const userTranscriptEl = document.getElementById('userTranscript');
 const aiTranscriptEl = document.getElementById('aiTranscript');
-// Used to set AI audio output
+// Used to set AI transcript
 const aiAudioEl = document.getElementById('aiAudio');
 
 let peerConnection = null;
@@ -56,37 +55,39 @@ function updateStatus(message, type = 'info') {
 // Update Transcripts
 // ==========================================
 // === > Below code functionalities used for our Transcript updation in our screen
-// Utility for clearing class/placeholder and appending text
-function _updateTranscript(el, text, isStreaming, streamingPrefix = "") {
-    if (el.classList.contains('empty')) {
-        el.classList.remove('empty');
-        el.textContent = '';
+function updateUserTranscript(text) {
+    if (userTranscriptEl.classList.contains('empty')) {
+        userTranscriptEl.classList.remove('empty');
+        userTranscriptEl.textContent = '';
     }
-    // Streaming logic (for AI only)
-    if (isStreaming) {
-        const lines = el.textContent.split('\n');
-        if (lines.length > 0 && lines[lines.length - 1].startsWith(streamingPrefix)) {
-            lines[lines.length - 1] = text;
-        } else if (el.textContent && !el.textContent.endsWith('\n')) {
-            lines.push(text);
-        } else {
-            lines[lines.length - 1] = text;
-        }
-        el.textContent = lines.join('\n');
-    } else {
-        el.textContent += `${text}\n`;
-    }
-    el.scrollTop = el.scrollHeight;
+    userTranscriptEl.textContent += `${text}\n`;
+    userTranscriptEl.scrollTop = userTranscriptEl.scrollHeight;
 }
 
-function updateUserTranscript(text) {
-    _updateTranscript(userTranscriptEl, text, false);
-}
 function updateAITranscript(text) {
-    _updateTranscript(aiTranscriptEl, text, false);
+    if (aiTranscriptEl.classList.contains('empty')) {
+        aiTranscriptEl.classList.remove('empty');
+        aiTranscriptEl.textContent = '';
+    }
+    aiTranscriptEl.textContent += `${text}\n`;
+    aiTranscriptEl.scrollTop = aiTranscriptEl.scrollHeight;
 }
+
 function updateStreamingAITranscript(text) {
-    _updateTranscript(aiTranscriptEl, text, true, 'Ishmael:');
+    if (aiTranscriptEl.classList.contains('empty')) {
+        aiTranscriptEl.classList.remove('empty');
+        aiTranscriptEl.textContent = '';
+    }
+    const lines = aiTranscriptEl.textContent.split('\n');
+    if (isStreaming && lines.length > 0 && lines[lines.length - 1].startsWith('Ishmael:')) {
+        lines[lines.length - 1] = text;
+    } else if (aiTranscriptEl.textContent && !aiTranscriptEl.textContent.endsWith('\n')) {
+        lines.push(text);
+    } else {
+        lines[lines.length - 1] = text;
+    }
+    aiTranscriptEl.textContent = lines.join('\n');
+    aiTranscriptEl.scrollTop = aiTranscriptEl.scrollHeight;
 }
 
 // ==========================================
@@ -483,9 +484,8 @@ function handleDataChannelMessage(msg) {
 // ==========================================
 // Event Listeners
 // ==========================================
-// Prevent double registration on possible script reload
-if (!startBtn.onclick) startBtn.addEventListener('click', startConversation);
-if (!stopBtn.onclick) stopBtn.addEventListener('click', stopConversation);
+startBtn.addEventListener('click', startConversation);
+stopBtn.addEventListener('click', stopConversation);
 
 // Handle page unload
 window.addEventListener('beforeunload', () => {

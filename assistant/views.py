@@ -43,8 +43,7 @@ def read_root(request):
     """Serve main interface HTML"""
     html_file = STATIC_DIR / "index_new.html"
     if html_file.exists():
-        with open(html_file, 'rb') as f:
-            return FileResponse(f)
+        return FileResponse(open(html_file, 'rb'))
     return _json_error("HTML not found", 404)
 
 

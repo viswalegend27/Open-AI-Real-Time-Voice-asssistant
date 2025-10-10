@@ -96,6 +96,55 @@ def save_message(session_id, role, content, user_id=None):
         analyze_conversation(session_id)
     return {'status': 'success', 'message_count': conv.total_messages}
 
+def get_recommendations(session_id):
+    """
+    Generate vehicle recommendations based on extracted preferences.
+    """
+    try:
+        conv = Conversation.objects.get(session_id=session_id)
+        preferences = conv.preferences.all()
+        interests = conv.vehicle_interests.all()
+        
+        recommendations = []
+        usage = preferences.filter(preference_type='usage').first()
+        
+        if usage:
+            for vehicle, data in MAHINDRA_VEHICLES.items():
+                score = 0
+                matched_features = []
+                
+                if usage.value in data['features']:
+                    score += 30
+                    matched_features.append(usage.value)
+                
+                if interests.filter(vehicle_name=vehicle).exists():
+                    interest_obj = interests.get(vehicle_name=vehicle)
+                    score += interest_obj.interest_level * 5
+                
+                if usage.value == 'adventure' and data['type'] == 'SUV':
+                    score += 20
+                elif usage.value == 'city' and data['segment'] == 'compact':
+                    score += 25
+                elif usage.value == 'family' and 'spacious' in data['features']:
+                    score += 20
+                    matched_features.append('spacious')
+                
+                if score > 20:
+                    Recommendation.objects.update_or_create(
+                        conversation=conv,
+                        vehicle_name=vehicle,
+                        defaults={
+                            'match_score': score,
+                            'reason': f"Matches your {usage.value} needs",
+                            'features_matched': matched_features
+                        }
+                    )
+                    recommendations.append({'vehicle': vehicle, 'score': score})
+        
+        return {'status': 'success', 'recommendations': sorted(recommendations, key=lambda x: x['score'], reverse=True)}
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}
+
 def generate_conversation_summary(session_id):
     """
     Generate AI-powered conversation summary with key details.
