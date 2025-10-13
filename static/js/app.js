@@ -6,6 +6,7 @@ const userTranscriptEl = document.getElementById('userTranscript');
 const aiTranscriptEl = document.getElementById('aiTranscript');
 // Used to set AI transcript audio element
 const aiAudioEl = document.getElementById('aiAudio');
+let streamingPrefix = 'Ishmael: ';
 
 let peerConnection = null;
 let dataChannel = null;
@@ -92,21 +93,24 @@ function updateAITranscript(text) {
 //   NOTE: Call this when an AI response starts (response.created).
 //   prefix: typically "Ishmael: "
 function startStreamingResponse(prefix = 'Ishmael: ') {
-    // If aiTranscript still has the placeholder intro (class 'empty'), do NOT treat it as committed text.
+    streamingPrefix = prefix;
+
     const aiEl = document.getElementById('aiTranscript');
     if (aiEl && aiEl.classList.contains('empty')) {
-        // Clear the placeholder and start with empty committedTranscript
+        // Clear placeholder and reset committedTranscript
         committedTranscript = '';
         aiEl.classList.remove('empty');
         aiEl.textContent = ''; // remove the intro text from DOM
     } else {
-        // No intro placeholder — preserve existing committed transcript (trim trailing newlines)
-        committedTranscript = (aiEl ? aiEl.textContent : '') .replace(/\n+$/, '');
+        // Preserve existing committed transcript (trim trailing newlines)
+        committedTranscript = (aiEl ? aiEl.textContent : '').replace(/\n+$/, '');
     }
-    streamingLine = prefix; // initialize in-progress line
-    // Render initial state (committed + streaming)
+
+    // Do NOT render the prefix alone. Start with an empty streamingLine.
+    streamingLine = '';
+    // Render current committed transcript only (no prefix yet)
     aiTranscriptEl.classList.remove('empty');
-    aiTranscriptEl.textContent = (committedTranscript ? committedTranscript + '\n' : '') + streamingLine;
+    aiTranscriptEl.textContent = committedTranscript ? committedTranscript + '\n' : '';
     aiTranscriptEl.scrollTop = aiTranscriptEl.scrollHeight;
     isStreaming = true;
 }
@@ -115,50 +119,68 @@ function startStreamingResponse(prefix = 'Ishmael: ') {
 //   NOTE: Call this for each delta update. text should be the full in-progress line
 //   e.g. "Ishmael: Hello, I can help you with..."
 function updateStreamingAITranscript(text) {
-    streamingLine = text;
+    // `text` here is the full in-progress content (no prefix)
+    streamingLine = text || '';
 
-    // Render only one in-progress line while keeping committed content intact
+    // If there's no actual streaming content yet, don't render the prefix alone.
+    let render = '';
     if (committedTranscript) {
-        aiTranscriptEl.textContent = committedTranscript + '\n' + streamingLine;
+        if (streamingLine) {
+            render = committedTranscript + '\n' + streamingPrefix + streamingLine;
+        } else {
+            render = committedTranscript;
+        }
     } else {
-        aiTranscriptEl.textContent = streamingLine;
+        if (streamingLine) {
+            render = streamingPrefix + streamingLine;
+        } else {
+            render = ''; // nothing to show yet
+        }
     }
-    aiTranscriptEl.scrollTop = aiTranscriptEl.scrollHeight;
 
-    // DEBUG: helpful console trace while testing
-    // DEBUG: console.debug('updateStreamingAITranscript → streamingLine length:', streamingLine.length);
+    aiTranscriptEl.textContent = render;
+    aiTranscriptEl.scrollTop = aiTranscriptEl.scrollHeight;
 }
 
 // finalizeStreamingResponse(finalText)
 //   NOTE: Call this when the AI has finished speaking (response.audio_transcript.done).
 //   finalText: the finalized transcript (prefer msg.transcript, fallback to streamingLine)
-    function finalizeStreamingResponse(finalText) {
-        // Skip if no meaningful final text
-        if (!finalText || !finalText.trim() || finalText.trim() === 'Ishmael:') {
-            console.debug('⚠️ Skipping empty finalizeStreamingResponse');
-            return;
-        }
-
-        const lineToAppend = finalText.trim();
-
-        // Prevent duplicate consecutive identical lines
-        const lastLine = committedTranscript.split('\n').pop().trim();
-        if (lastLine === lineToAppend) {
-            console.debug('⚠️ Skipping duplicate finalizeStreamingResponse');
-            return;
-        }
-
-        // Append finalized line to committedTranscript
-        committedTranscript = (committedTranscript ? committedTranscript + '\n' : '') + lineToAppend;
-
-        // Render committed text (no extra empty line if not needed)
-        aiTranscriptEl.textContent = committedTranscript.trim() + '\n';
-        aiTranscriptEl.scrollTop = aiTranscriptEl.scrollHeight;
-
-        // Reset streaming line
-        streamingLine = '';
-        isStreaming = false;
+function finalizeStreamingResponse(finalText) {
+    // finalText may already include prefix — normalize it
+    if (!finalText || !finalText.trim()) {
+        console.debug('⚠️ Skipping empty finalizeStreamingResponse');
+        return;
     }
+
+    // If finalText contains the prefix, strip it so we don't duplicate
+    const normalized = finalText.startsWith(streamingPrefix)
+        ? finalText.slice(streamingPrefix.length).trim()
+        : finalText.trim();
+
+    if (!normalized) {
+        console.debug('⚠️ Skipping finalizeStreamingResponse: no meaningful content after prefix normalization');
+        return;
+    }
+
+    // Prevent duplicate consecutive identical lines
+    const lastLine = committedTranscript.split('\n').pop().trim();
+    const lineToAppend = `${streamingPrefix}${normalized}`;
+    if (lastLine === lineToAppend.trim()) {
+        console.debug('⚠️ Skipping duplicate finalizeStreamingResponse');
+        return;
+    }
+
+    // Append finalized line to committedTranscript
+    committedTranscript = (committedTranscript ? committedTranscript + '\n' : '') + lineToAppend;
+
+    // Render committed text (no trailing blank lines)
+    aiTranscriptEl.textContent = committedTranscript.trim() + '\n';
+    aiTranscriptEl.scrollTop = aiTranscriptEl.scrollHeight;
+
+    // Reset streaming line & flags
+    streamingLine = '';
+    isStreaming = false;
+}
 
 // ==========================================
 // Start Conversation
@@ -526,23 +548,21 @@ function handleDataChannelMessage(msg) {
     
         const aiEl = document.getElementById('aiTranscript');
     
-        // If the intro placeholder is still present, clear both DOM and committedTranscript
+        // If the intro placeholder is still present, clear but don't render prefix yet
         if (aiEl && aiEl.classList.contains('empty')) {
-            // Remove intro from DOM
             aiEl.classList.remove('empty');
             aiEl.textContent = '';
-            // VERY IMPORTANT: also reset committedTranscript so intro isn't re-rendered
             committedTranscript = '';
-            streamingLine = ''; // reset streamingLine so startStreamingResponse can initialize cleanly if used
+            // don't force streamingLine here; startStreamingResponse will initialize state
         }
     
-        // If streaming hasn't been initialized, do so (defensive)
+        // Ensure streaming mode is enabled
         if (!isStreaming) {
-            startStreamingResponse('Ishmael: ');
+            startStreamingResponse(streamingPrefix);
         }
     
-        // Update the single in-progress line
-        updateStreamingAITranscript(`Ishmael: ${currentAIResponse}`);
+        // Update the streaming content (pass only the evolving text, no prefix)
+        updateStreamingAITranscript(currentAIResponse);
     }    
 
     // AI audio transcript complete - finalize and stop streaming mode
@@ -559,8 +579,8 @@ function handleDataChannelMessage(msg) {
         }
     
         // Finalize properly
-        finalizeStreamingResponse(`Ishmael: ${transcript}`);
-        saveMessageToDatabase('assistant', `Ishmael: ${transcript}`);
+        finalizeStreamingResponse(transcript);
+        saveMessageToDatabase('assistant', `${streamingPrefix}${transcript}`);
     
         currentAIResponse = '';
         isStreaming = false;
