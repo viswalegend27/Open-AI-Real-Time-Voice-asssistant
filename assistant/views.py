@@ -28,15 +28,23 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 def _json_error(message, status=400):
     return JsonResponse({"error": message}, status=status)
 
+def _parse_body(request):
+    """
+    Return a dict from JSON body (if any), else empty dict.
+    """
+    if hasattr(request, "body") and request.body:
+        try:
+            return json.loads(request.body)
+        except Exception:
+            pass
+    return {}
+
 def _get_session_id(request):
     # Accepts session_id from GET, POST, or JSON body
     session_id = request.GET.get('session_id') or request.POST.get('session_id')
-    if not session_id and hasattr(request, "body") and request.body:
-        try:
-            data = json.loads(request.body)
-            session_id = data.get('session_id')
-        except Exception:
-            pass
+    if not session_id:
+        data = _parse_body(request)
+        session_id = data.get('session_id')
     return session_id
 
 def read_root(request):
@@ -85,13 +93,14 @@ def health_check(request):
 def save_conversation(request):
     """Save conversation message"""
     try:
-        data = json.loads(request.body)
+        data = _parse_body(request)
         session_id, role, content = data.get('session_id'), data.get('role'), data.get('content')
         if not (session_id and role and content):
             return _json_error("Missing required fields", 400)
         result = save_message(session_id, role, content)
         return JsonResponse(result)
     except Exception as e:
+        logger.error(f"save_conversation error: {e}", exc_info=True)
         return _json_error(str(e), 500)
 
 # Get analysis of a conversation
@@ -167,4 +176,8 @@ def get_summary(request, session_id):
             "message": "Summary not generated yet. Call /api/generate-summary/ first."
         }, status=404)
     except Conversation.DoesNotExist:
+        logger.error(f"Conversation not found: {session_id}")
         return _json_error("Conversation not found", 404)
+    except Exception as e:
+        logger.error(f"get_summary error: {e}", exc_info=True)
+        return _json_error(str(e), 500)
