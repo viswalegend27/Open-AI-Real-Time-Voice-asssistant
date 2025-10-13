@@ -27,6 +27,7 @@ async function saveMessageToDatabase(role, content) {
     if (!sessionId || !content) return;
     try {
         //  [API CALL] save user or assistant message to backend
+        // Handle by save_conversation_message() in views.py
         await fetch('/api/conversation', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -105,6 +106,7 @@ async function startConversation() {
 
         // 1. Request ephemeral token from our backend
         // [API CALL] Get OpenAI ephemeral session key from backend
+        // Handled by create_realtime_session() in views.py 
         const response = await fetch('/api/session');
         if (!response.ok) {
             throw new Error(`Failed to get session: ${response.status}`);
@@ -139,6 +141,7 @@ async function startConversation() {
         updateStatus('Connecting to Ishmael...', 'info');
 
         // 7. Set up data channel for events (text, transcript, function calls)
+        // Our RTC peer connection is called here once again
         dataChannel = peerConnection.createDataChannel('oai-events');
         
         dataChannel.addEventListener('open', () => {
@@ -152,6 +155,7 @@ async function startConversation() {
             try {
                 const msg = JSON.parse(event.data);
                 console.log('Data channel message:', msg);
+                // Data channel is called here
                 handleDataChannelMessage(msg);
             } catch (e) {
                 console.error('Error parsing data channel message:', e);
@@ -173,6 +177,7 @@ async function startConversation() {
         await peerConnection.setLocalDescription(offer);
 
         // 10. Send offer (SDP) to OpenAI Realtime API and get the answer
+        // Part Offered to establish connection with OpenAI here. 
         const baseUrl = 'https://api.openai.com/v1/realtime';
         const model = 'gpt-4o-realtime-preview-2024-12-17';
         const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
@@ -261,6 +266,7 @@ async function handleFunctionCall(functionName, args, callId) {
             
             // Call backend API to generate summary
             // [API CALL] Request conversation summary from backend
+            // Handled by generate_summary() in views.py
             const response = await fetch('/api/generate-summary', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},

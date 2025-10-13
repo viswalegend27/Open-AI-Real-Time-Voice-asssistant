@@ -47,6 +47,8 @@ def read_root(request):
     return _json_error("HTML not found", 404)
 
 
+# Handle creating a new OpenAI real-time session
+# API Endpoint: /api/session
 @csrf_exempt
 def create_realtime_session(request):
     """Create OpenAI session"""
@@ -71,12 +73,14 @@ def create_realtime_session(request):
         logger.error(f"Session creation failed: {e}", exc_info=True)
         return _json_error(str(e), 500)
 
-
+# Health check endpoint
+@csrf_exempt
 def health_check(request):
     """Health check"""
     return JsonResponse({"status": "ok", "agent": C.AI_AGENT_NAME, "model": OPENAI_MODEL, "voice": OPENAI_VOICE})
 
-
+# Save a conversation message
+# API Endpoint: /api/conversation
 @csrf_exempt
 def save_conversation(request):
     """Save conversation message"""
@@ -90,7 +94,8 @@ def save_conversation(request):
     except Exception as e:
         return _json_error(str(e), 500)
 
-
+# Get analysis of a conversation
+# API Endpoint: /api/analysis
 @csrf_exempt
 def get_analysis(request):
     """Get conversation analysis"""
@@ -100,7 +105,8 @@ def get_analysis(request):
     result = analyze_conversation(session_id)
     return JsonResponse(result)
 
-
+# Get vehicle recommendations
+# API Endpoint: /api/get-recommendations
 @csrf_exempt
 def get_recommendations(request):
     """Get vehicle recommendations"""
@@ -110,6 +116,8 @@ def get_recommendations(request):
     result = get_recs(session_id)
     return JsonResponse(result)
 
+# Generate a conversation summary
+# API Endpoint: /api/generate-summary
 @csrf_exempt
 def generate_summary(request):
     """Generate AI-powered conversation summary"""
@@ -121,6 +129,8 @@ def generate_summary(request):
         result['display_text'] = result['formatted_summary']
     return JsonResponse(result)
 
+# Retrieve an existing conversation summary
+# API Endpoint: /api/get-summary/<session_id>
 @csrf_exempt
 def get_summary(request, session_id):
     """Retrieve existing conversation summary"""
