@@ -94,25 +94,34 @@ def analyze_conversation(session_id):
         else:
             extracted = {}
 
-        # Save extracted preferences
-        if extracted.get("budget"):
-            UserPreference.objects.update_or_create(
-                conversation=conv,
-                preference_type='budget',
-                defaults={"value": extracted["budget"], "confidence": 0.8}
-            )
-        if extracted.get("usage"):
-            UserPreference.objects.update_or_create(
-                conversation=conv,
-                preference_type='usage',
-                defaults={"value": extracted["usage"], "confidence": 0.8}
-            )
-        if extracted.get("priority_features"):
-            UserPreference.objects.update_or_create(
-                conversation=conv,
-                preference_type='priority_features',
-                defaults={"value": ", ".join(extracted["priority_features"]), "confidence": 0.8}
-            )
+        # Save extracted preferences with diagnostics
+        import logging
+        logger = logging.getLogger(__name__)
+        try:
+            if extracted.get("budget"):
+                logger.info(f"Saving budget preference: {extracted['budget']}")
+                UserPreference.objects.update_or_create(
+                    conversation=conv,
+                    preference_type='budget',
+                    defaults={"value": str(extracted["budget"]), "confidence": 0.8}
+                )
+            if extracted.get("usage"):
+                logger.info(f"Saving usage preference: {extracted['usage']}")
+                UserPreference.objects.update_or_create(
+                    conversation=conv,
+                    preference_type='usage',
+                    defaults={"value": str(extracted["usage"]), "confidence": 0.8}
+                )
+            if extracted.get("priority_features"):
+                features_str = ", ".join([str(f) for f in extracted["priority_features"]])
+                logger.info(f"Saving priority_features: {features_str}")
+                UserPreference.objects.update_or_create(
+                    conversation=conv,
+                    preference_type='priority_features',
+                    defaults={"value": features_str, "confidence": 0.8}
+                )
+        except Exception as e:
+            logger.error(f"UserPreference DB store error: {e}")
         if extracted.get("vehicle_interest"):
             for vehicle in extracted["vehicle_interest"]:
                 VehicleInterest.objects.update_or_create(
