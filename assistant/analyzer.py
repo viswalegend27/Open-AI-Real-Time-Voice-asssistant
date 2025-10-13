@@ -135,8 +135,8 @@ def save_message(session_id, role, content, user_id=None):
     Message.objects.create(conversation=conv, role=role, content=content)
     conv.total_messages += 1
     conv.save()
-    if conv.total_messages % 3 == 0:
-        analyze_conversation(session_id)
+    # Always analyze - update preferences every message
+    analyze_conversation(session_id)
     return {'status': 'success', 'message_count': conv.total_messages}
 
 def get_recommendations(session_id):
