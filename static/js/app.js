@@ -431,8 +431,29 @@ function handleDataChannelMessage(msg) {
         updateUserTranscript(`You: ${transcript}`);
         saveMessageToDatabase('user', transcript);
 
-        // FALLBACK: trigger summary if user asked verbally and OpenAI didn't call the function
         const lowerTranscript = transcript.toLowerCase();
+
+        // Listen for end-conversation commands
+        const endKeywords = [
+            'end conversation',
+            'stop conversation',
+            'finish conversation',
+            'close conversation',
+            'exit conversation',
+            'terminate conversation',
+            'goodbye',
+            'end chat',
+            'disconnect'
+        ];
+        if (endKeywords.some(keyword => lowerTranscript.includes(keyword))) {
+            console.log('🛑 End conversation phrase detected in user speech:', transcript);
+            updateUserTranscript('You ended the conversation.');
+            updateStatus('Conversation ended by user.', 'warning');
+            stopConversation();
+            return;
+        }
+
+        // FALLBACK: trigger summary if user asked verbally and OpenAI didn't call the function
         const summaryKeywords = [
             'summary', 'summarize', 'recap', 'what did we discuss',
             'my likings', 'my liking', 'my preferences', 'my preference',
