@@ -448,49 +448,70 @@ function handleDataChannelMessage(msg) {
     }
 
     // User speech transcription
+    // --- More dynamic keyword action system ---
     if (type === 'conversation.item.input_audio_transcription.completed') {
         const transcript = msg.transcript || '';
         updateUserTranscript(`You: ${transcript}`);
         saveMessageToDatabase('user', transcript);
 
-        const lowerTranscript = transcript.toLowerCase();
-
-        // Listen for end-conversation commands
-        const endKeywords = [
-            'end conversation',
-            'stop conversation',
-            'finish conversation',
-            'close conversation',
-            'exit conversation',
-            'terminate conversation',
-            'goodbye',
-            'end chat',
-            'disconnect'
-        ];
-        if (endKeywords.some(keyword => lowerTranscript.includes(keyword))) {
-            console.log('🛑 End conversation phrase detected in user speech:', transcript);
-            updateUserTranscript('You ended the conversation.');
-            updateStatus('Conversation ended by user.', 'warning');
-            stopConversation();
-            return;
-        }
-
-        // FALLBACK: trigger summary if user asked verbally and OpenAI didn't call the function
-        const summaryKeywords = [
-            'summary', 'summarize', 'recap', 'what did we discuss',
-            'my likings', 'my liking', 'my preferences', 'my preference',
-            'what i like', 'what do i like', 'my interests', 'my interest',
-            'my requirements', 'my requirement', 'what i want', 'my needs'
-        ];
-        if (summaryKeywords.some(keyword => lowerTranscript.includes(keyword)) && !summaryInProgress) {
-            console.log('🚨 Summary keyword detected in user speech:', transcript);
-            // Give OpenAI a short window to call the function; if not, trigger ourselves
-            setTimeout(() => {
-                if (!summaryInProgress) {
-                    console.log('🔄 OpenAI didn\'t call function, triggering manually...');
-                    handleFunctionCall('generate_conversation_summary', {session_id: sessionId}, null);
+        // Define dynamic keyword-based action registry
+        const inputAudioActions = [
+            {
+                type: "end",
+                keywords: [
+                    /end( the)? conversation/i,
+                    /stop( the)? conversation/i,
+                    /finish( the)? conversation/i,
+                    /close( the)? conversation/i,
+                    /exit( the)? conversation/i,
+                    /terminate( the)? conversation/i,
+                    /\bgoodbye\b/i,
+                    /end chat/i,
+                    /disconnect/i
+                ],
+                action: () => {
+                    console.log('🛑 End conversation command detected.');
+                    updateUserTranscript('You ended the conversation.');
+                    updateStatus('Conversation ended by user.', 'warning');
+                    stopConversation();
                 }
-            }, 2000);
+            },
+            {
+                type: "summary",
+                keywords: [
+                    /summary|summarize|recap/i,
+                    /what (did we|have we) discuss/i,
+                    /my (liking|likings|preference|preferences|interest|interests|requirement|requirements|needs)/i,
+                    /what do? i like/i,
+                    /what do? i want/i
+                ],
+                action: () => {
+                    if (!summaryInProgress) {
+                        console.log('🚨 Summary keyword detected.');
+                        setTimeout(() => {
+                            if (!summaryInProgress) {
+                                console.log('🔄 OpenAI didn\'t call function, triggering manually...');
+                                handleFunctionCall('generate_conversation_summary', {session_id: sessionId}, null);
+                            }
+                        }, 2000);
+                    }
+                }
+            }
+            // Add more actions here easily!
+        ];
+        // Run all actions whose keywords match (by regexp or string)
+        let actionTriggered = false;
+        for (let rule of inputAudioActions) {
+            if (rule.keywords.some(keyword =>
+                typeof keyword === 'string'
+                    ? transcript.toLowerCase().includes(keyword.toLowerCase())
+                    : keyword.test(transcript)
+            )) {
+                rule.action();
+                actionTriggered = true;
+                // Uncomment break if you want only one action per message:
+                // break;
+            }
         }
     }
 
