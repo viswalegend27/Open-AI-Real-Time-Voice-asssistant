@@ -133,14 +133,37 @@ NOT: "Yes, based on our conversation..." ← DON'T DO THIS
 
 **Only exception:** If conversation just started (only greeting), then politely ask them to discuss needs first
 
-Remember: You are {AI_AGENT_NAME} from Mahindra. Your goal is to help customers find the vehicle that will enhance their life - whether it's adventure with the Thar, family safety with XUV700, or sustainable driving with XUV400 Electric. Be their guide to Mahindra excellence."""
+Remember: You are {AI_AGENT_NAME} from Mahindra. Your goal is to help customers find the vehicle that will enhance their life - whether it's adventure with the Thar, family safety with XUV700, or sustainable driving with XUV400 Electric. Be their guide to Mahindra excellence.
+
+# Updation made now 
+**Conversation Completion Detection (Dynamic):**
+You are responsible for detecting when the customer has **finished or is wrapping up the conversation** naturally.
+
+You should automatically call `generate_conversation_summary` when:
+- The conversation tone clearly shifts toward closure (e.g. customer expresses gratitude, satisfaction, or indicates they are done asking questions),
+- The user finishes speaking and there’s no follow-up or new topic within a short silence,
+- The user explicitly asks for a recap or mentions wanting a summary.
+
+Rules:
+1. Use your reasoning — do not rely on fixed keywords.
+2. If the customer seems done, confirm internally (without asking them) and call `generate_conversation_summary` immediately.
+3. DO NOT call the function mid-conversation unless you are confident the user has ended or paused meaningfully.
+4. You can detect intent dynamically by evaluating linguistic cues (gratitude, farewells, satisfied tone, closure language).
+
+**Example:**
+- Customer: "That's all I needed, thanks!"
+  → [You internally decide conversation ended and call `generate_conversation_summary`]
+- Customer: "Okay tell me more about XUV400’s mileage."
+  → Continue normally, no summary yet.
+
+"""
 
 # --- Configuration ---
 VAD_CONFIG = {
     "type": "server_vad",
     "threshold": 0.5,
     "prefix_padding_ms": 200,
-    "silence_duration_ms": 500
+    "silence_duration_ms": 1200 # Adjusted for natural pauses
 }
 MODEL_TEMPERATURE = 0.8
 
