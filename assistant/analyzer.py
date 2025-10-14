@@ -1,35 +1,37 @@
 """Conversation intelligence analyzer and recommendation engine"""
-import os
-import json
+import os, json, logging
 from dotenv import load_dotenv
-from assistant.models import (
-    Conversation, Message, UserPreference, VehicleInterest, Recommendation, ConversationSummary
-)
 from django.utils import timezone
+from assistant.models import Conversation, Message, UserPreference, VehicleInterest, Recommendation, ConversationSummary
 
 load_dotenv()
-
-# OpenAI API setup for summary generation
 try:
     from openai import OpenAI
     OPENAI_CLIENT = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 except ImportError:
     OPENAI_CLIENT = None
 
-# Mahindra vehicle feature index is now fetched dynamically from OpenAI for smoothness and up-to-date info.
+def openai_chat(prompt, user_content=None, temp=0.2, fmt="json_object"):
+    if not OPENAI_CLIENT: return None
+    try:
+        msgs = [{"role": "system", "content": prompt}]
+        if user_content:
+            msgs.append({"role": "user", "content": user_content})
+        return json.loads(OPENAI_CLIENT.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=msgs,
+            temperature=temp,
+            response_format={"type": fmt}
+        ).choices[0].message.content)
+    except Exception:
+        return None
+
 def get_mahindra_vehicles():
-    """
-    Dynamically retrieve the Mahindra vehicle list and features (with fallback to static values). 
-    Returns dict: {vehicle_name: {...feature dict...}}
-    """
-    openai_schema_prompt = (
-        """
-        You are an expert on Mahindra vehicles. 
-        List all major Mahindra passenger vehicles currently on sale in India, with their type, segment, and top features. 
-        Return a JSON mapping:
-          { "ModelName": { "type": "SUV/EV/etc", "segment": "premium/compact/etc", "features": ["feature", ...] }, ... }
-        Return only what is real and don't invent new models. Make sure it's parseable JSON.
-        """
+    prompt = (
+        "You are an expert on Mahindra vehicles. "
+        "List all major Mahindra passenger vehicles currently on sale in India, with their type, segment, and top features. "
+        "Return a JSON mapping: { 'ModelName': { 'type': 'SUV/EV/etc', 'segment': 'premium/compact/etc', 'features': ['feature', ...] }, ... }. "
+        "Return only what is real and don't invent new models."
     )
     fallback = {
         'XUV700': {'type': 'SUV', 'segment': 'premium', 'features': ['luxury', 'tech', 'safety', 'family', 'spacious']},
@@ -40,94 +42,44 @@ def get_mahindra_vehicles():
         'Scorpio Classic': {'type': 'SUV', 'segment': 'workhorse', 'features': ['reliable', 'tough', 'value']},
         'Bolero': {'type': 'SUV', 'segment': 'commercial', 'features': ['tough', 'reliable', 'rural', 'commercial']},
     }
-    if OPENAI_CLIENT:
-        try:
-            response = OPENAI_CLIENT.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": openai_schema_prompt}
-                ],
-                temperature=0.1,
-                response_format={"type": "json_object"}
-            )
-            vehicle_dict = json.loads(response.choices[0].message.content)
-            if isinstance(vehicle_dict, dict) and vehicle_dict:
-                return vehicle_dict
-        except Exception:
-            pass
-    return fallback
+    fetched = openai_chat(prompt, temp=0.1, fmt="json_object")
+    return fetched if fetched and isinstance(fetched, dict) else fallback
 
 def analyze_conversation(session_id):
     """
-    Use OpenAI to dynamically extract preferences, vehicle interest & features from the conversation.
+    Extract preferences, vehicle interest & features from the conversation with OpenAI.
     """
     try:
         conv = Conversation.objects.get(session_id=session_id)
         messages = conv.messages.all().order_by('timestamp')
         user_messages = [m.content for m in messages if m.role == 'user']
-        all_text = "\n".join([f"Customer: {m}" for m in user_messages])
-        system_prompt = (
-            "You are an expert car sales assistant AI."
-            " Analyze the customer conversation and return a JSON always containing:"
-            '{\n'
-            '  "budget": "number + unit or null",\n'
-            '  "usage": "primary usage (family/adventure/city/commercial) or null",\n'
-            '  "priority_features": ["list of features"],\n'
-            '  "vehicle_interest": ["model names or null"],\n'
-            '  "other_insights": "any relevant note or null"\n'
-            '}'
+        all_text = "\n".join(f"Customer: {m}" for m in user_messages)
+        prompt = (
+            "You are an expert car sales assistant AI. Analyze the customer conversation and return a JSON always containing: "
+            '{ "budget": "number + unit or null", "usage": "primary usage (family/adventure/city/commercial) or null", "priority_features": ["list of features"], "vehicle_interest": ["model names or null"], "other_insights": "any relevant note or null" } '
             "Rules: identify only what the customer says, don't guess! Respond only with JSON."
         )
-
-        extracted = {}
-        if OPENAI_CLIENT:
-            response = OPENAI_CLIENT.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": all_text}
-                ],
-                temperature=0.2,
-                response_format={"type": "json_object"},
-            )
-            extracted = json.loads(response.choices[0].message.content)
-        else:
-            extracted = {}
-
-        # Save extracted preferences with diagnostics
-        import logging
+        extracted = openai_chat(prompt, all_text, temp=0.2) or {}
         logger = logging.getLogger(__name__)
         try:
-            if extracted.get("budget"):
-                logger.info(f"Saving budget preference: {extracted['budget']}")
+            upds = [
+                ('budget', extracted.get('budget')),
+                ('usage', extracted.get('usage')),
+                ('priority_features', ", ".join(str(f) for f in extracted.get('priority_features', []))) if extracted.get('priority_features') else None
+            ]
+            for ptype, pval in filter(lambda x: x and x[1], upds):
+                logger.info(f"Saving {ptype} preference: {pval}")
                 UserPreference.objects.update_or_create(
-                    conversation=conv,
-                    preference_type='budget',
-                    defaults={"value": str(extracted["budget"]), "confidence": 0.8}
-                )
-            if extracted.get("usage"):
-                logger.info(f"Saving usage preference: {extracted['usage']}")
-                UserPreference.objects.update_or_create(
-                    conversation=conv,
-                    preference_type='usage',
-                    defaults={"value": str(extracted["usage"]), "confidence": 0.8}
-                )
-            if extracted.get("priority_features"):
-                features_str = ", ".join([str(f) for f in extracted["priority_features"]])
-                logger.info(f"Saving priority_features: {features_str}")
-                UserPreference.objects.update_or_create(
-                    conversation=conv,
-                    preference_type='priority_features',
-                    defaults={"value": features_str, "confidence": 0.8}
+                    conversation=conv, preference_type=ptype,
+                    defaults={"value": str(pval), "confidence": 0.8}
                 )
         except Exception as e:
             logger.error(f"UserPreference DB store error: {e}")
         if extracted.get("vehicle_interest"):
             for vehicle in extracted["vehicle_interest"]:
                 VehicleInterest.objects.update_or_create(
-                    conversation=conv,
-                    vehicle_name=vehicle,
-                    defaults={"interest_level": 8}
+                    conversation=conv, vehicle_name=vehicle,
+                    defaults={"interest_level":8}
                 )
         return {'status': 'success', 'preferences_extracted': conv.preferences.count(), 'extracted': extracted}
     except Exception as e:
