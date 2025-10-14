@@ -467,7 +467,12 @@ function handleDataChannelMessage(msg) {
                     /terminate( the)? conversation/i,
                     /\bgoodbye\b/i,
                     /end chat/i,
-                    /disconnect/i
+                    /disconnect/i,
+                    // Added broader, more natural end intentions:
+                    /i (would|want|wish|like|need|prefer|plan) (to )?(end|stop|conclude|finish|close|exit|terminate) (my|the)? ?(chat|conversation)?/i,
+                    /i['’]?d (like|love) (to )?(end|stop|finish|conclude|close|exit|terminate) (my|the)? ?(chat|conversation)?/i,
+                    /can you (end|stop|conclude|finish|close|exit|terminate) (my|the)? ?(chat|conversation)?/i,
+                    /please (end|stop|conclude|finish|close|exit|terminate) (my|the)? ?(chat|conversation)?/i
                 ],
                 action: () => {
                     console.log('🛑 End conversation command detected.');
