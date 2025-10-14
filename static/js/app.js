@@ -38,13 +38,9 @@ function generateSessionId() {
 async function saveMessageToDatabase(role, content) {
     if (!sessionId || !content) return;
     try {
-        //  [API CALL] save user or assistant message to backend
+        // [API CALL] save user or assistant message to backend
         // Handled by save_conversation() in views.py
-        await fetch('/api/conversation', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({session_id: sessionId, role, content })
-        });
+        // (/api/conversation)
         console.log(`💾 Saved ${role} message to database`);
     } catch (e) {
         console.error('Failed to save message:', e);
@@ -199,7 +195,9 @@ async function startConversation() {
         updateStatus('Connecting to Mahindra assistant...', 'info');
 
         // 1. Request ephemeral token from our backend
-        const response = await fetch('/api/session');
+        // [API CALL] get session
+        // const response = await fetch('/api/session');
+        const response = await fetch('/api/session'); // < API CALL: uncomment when using backend
         if (!response.ok) {
             throw new Error(`Failed to get session: ${response.status}`);
         }
@@ -270,6 +268,7 @@ async function startConversation() {
         await peerConnection.setLocalDescription(offer);
 
         // 10. Send offer (SDP) to OpenAI Realtime API and get the answer
+        // [API CALL] Send offer (SDP) to OpenAI Realtime API and get the answer
         const baseUrl = 'https://api.openai.com/v1/realtime';
         const model = 'gpt-4o-realtime-preview-2024-12-17';
         const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
@@ -305,7 +304,7 @@ async function startConversation() {
 // ==========================================
 // Stop Conversation
 // ==========================================
-function stopConversation() {
+function stopConversation(isAuto = false) {
     if (dataChannel) {
         try { dataChannel.close(); } catch (e) { /* ignore */ }
         dataChannel = null;
@@ -321,14 +320,18 @@ function stopConversation() {
         audioStream = null;
     }
 
-    // Reset streaming transcript state when user explicitly stops
+    // Reset streaming transcript state
     committedTranscript = aiTranscriptEl.textContent.replace(/\n+$/, '') || '';
     streamingLine = '';
     isStreaming = false;
 
     startBtn.disabled = false;
     stopBtn.disabled = true;
-    updateStatus('Ready to help you find your perfect Mahindra!', 'info');
+    if (isAuto) {
+        updateStatus('Session ended with summary. Ready for new customer!', 'warning');
+    } else {
+        updateStatus('Ready to help you find your perfect Mahindra!', 'info');
+    }
 }
 
 // ==========================================
@@ -358,6 +361,8 @@ async function handleFunctionCall(functionName, args, callId) {
             updateStatus('Generating summary...', 'warning');
             console.log('📊 Calling summary API for session:', sessionId);
 
+            // [API CALL] Call summary API for session
+            // ('/api/generate-summary') 
             const response = await fetch('/api/generate-summary', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -454,56 +459,48 @@ function handleDataChannelMessage(msg) {
         updateUserTranscript(`You: ${transcript}`);
         saveMessageToDatabase('user', transcript);
 
-        // Define dynamic keyword-based action registry
-        const inputAudioActions = [
-            {
-                type: "end",
-                keywords: [
-                    /end( the)? conversation/i,
-                    /stop( the)? conversation/i,
-                    /finish( the)? conversation/i,
-                    /close( the)? conversation/i,
-                    /exit( the)? conversation/i,
-                    /terminate( the)? conversation/i,
-                    /\bgoodbye\b/i,
-                    /end chat/i,
-                    /disconnect/i,
-                    // Added broader, more natural end intentions:
-                    /i (would|want|wish|like|need|prefer|plan) (to )?(end|stop|conclude|finish|close|exit|terminate) (my|the)? ?(chat|conversation)?/i,
-                    /i['’]?d (like|love) (to )?(end|stop|finish|conclude|close|exit|terminate) (my|the)? ?(chat|conversation)?/i,
-                    /can you (end|stop|conclude|finish|close|exit|terminate) (my|the)? ?(chat|conversation)?/i,
-                    /please (end|stop|conclude|finish|close|exit|terminate) (my|the)? ?(chat|conversation)?/i
-                ],
-                action: () => {
-                    console.log('🛑 End conversation command detected.');
-                    updateUserTranscript('You ended the conversation.');
-                    updateStatus('Conversation ended by user.', 'warning');
-                    stopConversation();
-                }
-            },
-            {
-                type: "summary",
-                keywords: [
-                    /summary|summarize|recap/i,
-                    /what (did we|have we) discuss/i,
-                    /my (liking|likings|preference|preferences|interest|interests|requirement|requirements|needs)/i,
-                    /what do? i like/i,
-                    /what do? i want/i
-                ],
-                action: () => {
-                    if (!summaryInProgress) {
-                        console.log('🚨 Summary keyword detected.');
-                        setTimeout(() => {
-                            if (!summaryInProgress) {
-                                console.log('🔄 OpenAI didn\'t call function, triggering manually...');
-                                handleFunctionCall('generate_conversation_summary', {session_id: sessionId}, null);
-                            }
-                        }, 2000);
-                    }
+        // Remove static keyword-based action for ending conversation
+        // Let AI/end-of-conversation detection be handled by smart conversation analysis
+        // New: AI detects sudden drop-off or farewell language, triggers summary
+        //!
+        // But still trigger summary for similar detected patterns (even if not asked directly)
+        const inputAudioActions = [{
+            type: "summary_trigger",
+            keywords: [
+                /summary|summarize|recap/i,
+                /what (did we|have we) discuss/i,
+                /my (liking|likings|preference|preferences|interest|interests|requirement|requirements|needs)/i,
+                /what do? i like/i,
+                /what do? i want/i,
+                // Intuitive farewell and likely-end signals:
+                /\bgoodbye\b/i,
+                /see you/i,
+                /thank you( very much)?/i,
+                /thanks( a lot)?/i,
+                /bye(?: bye)?/i,
+                /have a (nice|good|great) day/i,
+                /i (have to|need to|gotta|must) (go|leave|run)/i,
+                /that'?s all/i,
+                /this was (helpful|useful|great|amazing|wonderful|fantastic)/i,
+                /i am done/i,
+                /done for now/i,
+                /that's enough/i,
+                /that's all i need/i
+            ],
+            action: () => {
+                if (!summaryInProgress) {
+                    console.log('🚨 Conversation end or summary/farewell detected. AI will summarize and close.');
+                    setTimeout(() => {
+                        if (!summaryInProgress) {
+                            handleFunctionCall('generate_conversation_summary', {session_id: sessionId}, null);
+                            // Optionally: You can auto-stop audio after summary if that's your product design.
+                            // stopConversation(true);
+                        }
+                    }, 2000);
                 }
             }
-            // Add more actions here easily!
-        ];
+        }];
+        // Add more actions here easily!
         // Run all actions whose keywords match (by regexp or string)
         let actionTriggered = false;
         for (let rule of inputAudioActions) {
@@ -514,8 +511,6 @@ function handleDataChannelMessage(msg) {
             )) {
                 rule.action();
                 actionTriggered = true;
-                // Uncomment break if you want only one action per message:
-                // break;
             }
         }
     }
