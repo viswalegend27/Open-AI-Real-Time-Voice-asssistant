@@ -39,8 +39,18 @@ async function saveMessageToDatabase(role, content) {
     if (!sessionId || !content) return;
     try {
         // [API CALL] save user or assistant message to backend
-        // Handled by save_conversation() in views.py
-        // (/api/conversation)
+        const response = await fetch('/api/conversation', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                session_id: sessionId,
+                role: role,
+                content: content
+            })
+        });
+        if (!response.ok) {
+            throw new Error(await response.text());
+        }
         console.log(`💾 Saved ${role} message to database`);
     } catch (e) {
         console.error('Failed to save message:', e);
@@ -196,8 +206,7 @@ async function startConversation() {
 
         // 1. Request ephemeral token from our backend
         // [API CALL] get session
-        // const response = await fetch('/api/session');
-        const response = await fetch('/api/session'); // < API CALL: uncomment when using backend
+        const response = await fetch('/api/session');
         if (!response.ok) {
             throw new Error(`Failed to get session: ${response.status}`);
         }
@@ -207,6 +216,8 @@ async function startConversation() {
         const EPHEMERAL_KEY = data.client_secret.value;
 
         updateStatus('Preparing consultation session...', 'info');
+
+        // (No explicit conversation creation needed. Conversation will be created in backend on first saveMessageToDatabase call.)
 
         // 3. Create RTCPeerConnection
         peerConnection = new RTCPeerConnection();
