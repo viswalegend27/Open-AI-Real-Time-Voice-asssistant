@@ -49,6 +49,7 @@ def analyze_conversation(session_id):
     """
     Extract preferences, vehicle interest & features from the conversation with OpenAI.
     """
+    # use OpenAI to analyze conversation
     try:
         conv = Conversation.objects.get(session_id=session_id)
         messages = conv.messages.all().order_by('timestamp')
@@ -70,6 +71,7 @@ def analyze_conversation(session_id):
             ]
             for ptype, pval in filter(lambda x: x and x[1], upds):
                 logger.info(f"Saving {ptype} preference: {pval}")
+                # Django ORM update or create
                 UserPreference.objects.update_or_create(
                     conversation=conv, preference_type=ptype,
                     defaults={"value": str(pval), "confidence": 0.8}
@@ -79,6 +81,7 @@ def analyze_conversation(session_id):
         if extracted.get("vehicle_interest"):
             # our vehicle interest DB store
             for vehicle in extracted["vehicle_interest"]:
+                # Django ORM update or create
                 VehicleInterest.objects.update_or_create(
                     conversation=conv, vehicle_name=vehicle,
                     defaults={"interest_level":8}
