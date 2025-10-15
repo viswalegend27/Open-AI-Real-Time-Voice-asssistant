@@ -62,6 +62,7 @@ def analyze_conversation(session_id):
         extracted = openai_chat(prompt, all_text, temp=0.2) or {}
         logger = logging.getLogger(__name__)
         try:
+            # our user preferences DB store
             upds = [
                 ('budget', extracted.get('budget')),
                 ('usage', extracted.get('usage')),
@@ -76,6 +77,7 @@ def analyze_conversation(session_id):
         except Exception as e:
             logger.error(f"UserPreference DB store error: {e}")
         if extracted.get("vehicle_interest"):
+            # our vehicle interest DB store
             for vehicle in extracted["vehicle_interest"]:
                 VehicleInterest.objects.update_or_create(
                     conversation=conv, vehicle_name=vehicle,
