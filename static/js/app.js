@@ -409,6 +409,23 @@ async function handleFunctionCall(functionName, args, callId) {
       
           if (result.status === 'success' && result.formatted_summary) {
             console.log('✅ Summary generated successfully');
+            // After summary: Generate/store recommendations
+            try {
+              const recResponse = await fetch('/api/recommendations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: callSessionId })
+              });
+              if (recResponse.ok) {
+                const recResult = await recResponse.json();
+                console.log('🚗 Recommendations generated:', recResult);
+                // Optional: update UI here if you want to show recommendations
+              } else {
+                console.warn('Failed to generate recommendations:', await recResponse.text());
+              }
+            } catch (e) {
+              console.error('Failed to fetch/store recommendations:', e);
+            }
       
             // Inform OpenAI (respond to function call) if dataChannel is open
             if (dataChannel && dataChannel.readyState === 'open' && callId) {

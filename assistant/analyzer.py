@@ -108,54 +108,83 @@ def save_message(session_id, role, content, user_id=None):
 def get_recommendations(session_id):
     """
     Use OpenAI to recommend Mahindra vehicles based on extracted preferences dynamically.
+    LOGGING ADDED for debugging DB issues.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"get_recommendations() called with session_id={session_id}")
     try:
         conv = Conversation.objects.get(session_id=session_id)
+        logger.info(f"Found Conversation: id={conv.id}")
         preferences = conv.preferences.all()
+        logger.info(f"Preferences found: {[f'{p.preference_type}: {p.value}' for p in preferences]}")
         interests = conv.vehicle_interests.all()
+        logger.info(f"Vehicle Interests: {[v.vehicle_name for v in interests]}")
         vehicles_data = json.dumps(get_mahindra_vehicles())
 
         # Gather user preferences and vehicle interests
         cleaned_prefs = {p.preference_type: p.value for p in preferences}
         vehicle_interest = [v.vehicle_name for v in interests]
 
-        prompt = f"""You are a Mahindra vehicles expert. Match this customer's preferences and interests to Mahindra vehicles: {vehicles_data}\n\nPreferences: {json.dumps(cleaned_prefs)}\nInterested vehicles: {vehicle_interest}\n\nReturn a JSON array of recommendations. Each item must be:\n  {{ \"vehicle_name\": name, \"why\": reason, \"score\": 1-10 }}.\nOnly recommend from these Mahindra vehicles.\n\nBe concise and specific. Never return vehicles with score < 5."""
+        prompt = f"""
+        You are a Mahindra vehicles expert. Match this customer's preferences and interests to Mahindra vehicles: {vehicles_data}
+        Preferences: {json.dumps(cleaned_prefs)}
+        Interested vehicles: {vehicle_interest}
+
+        Return a JSON object with a single key 'recommendations', whose value is a list of objects. 
+        Example format:
+        {{
+           "recommendations": [
+             {{ "vehicle_name": <name>, "why": <reason>, "score": <1-10> }},
+             ...
+           ]
+        }}
+        Only recommend from these Mahindra vehicles.
+        Be concise and specific. Never return vehicles with score < 5.
+        """
 
         openai_recommendations = []
         if OPENAI_CLIENT:
             response = OPENAI_CLIENT.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "You are an assistant that recommends Mahindra vehicles given preferences. Always output a JSON array as described."},
+                    {"role": "system", "content": "You are an assistant that recommends Mahindra vehicles given preferences. Always output a JSON object with a 'recommendations' array as described."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.25,
-                response_format={"type": "json_array"},
+                response_format={"type": "json_object"},
             )
-            openai_recommendations = json.loads(response.choices[0].message.content)
+            ai_content = json.loads(response.choices[0].message.content)
+            openai_recommendations = ai_content.get('recommendations', [])
+            logger.info(f"OpenAI recommendations returned: {openai_recommendations}")
         else:
             # Fallback (static)
             for vehicle in get_mahindra_vehicles():
                 if not cleaned_prefs or vehicle in vehicle_interest:
                     openai_recommendations.append({"vehicle_name": vehicle, "why": "In fallback mode.", "score": 5})
+            logger.info(f"Fallback recommendations: {openai_recommendations}")
 
         recs_result = []
         features = cleaned_prefs.get('priority_features', '').split(', ') if cleaned_prefs.get('priority_features') else []
         for rec in openai_recommendations:
-            # Update or create recommendation in DB
-            # But not store to the DB.
-            Recommendation.objects.update_or_create(
-                conversation=conv,
-                vehicle_name=rec.get("vehicle_name"),
-                defaults={
-                    'match_score': rec.get("score", 5),
-                    'reason': rec.get("why", "Relevant to your preferences"),
-                    'features_matched': features
-                }
-            )
+            try:
+                obj, created = Recommendation.objects.update_or_create(
+                    conversation=conv,
+                    vehicle_name=rec.get("vehicle_name"),
+                    defaults={
+                        'match_score': rec.get("score", 5),
+                        'reason': rec.get("why", "Relevant to your preferences"),
+                        'features_matched': features
+                    }
+                )
+                logger.info(f"Recommendation saved: {obj.vehicle_name}, created={created}")
+            except Exception as rec_exception:
+                logger.error(f"Error saving recommendation for {rec.get('vehicle_name')}: {rec_exception}")
             recs_result.append({'vehicle': rec.get("vehicle_name"), 'score': rec.get("score", 5)})
+        logger.info(f"Recommendation process complete for session_id={session_id}")
         return {'status': 'success', 'recommendations': sorted(recs_result, key=lambda x: x['score'], reverse=True)}
     except Exception as e:
+        logger.error(f"get_recommendations failed: {e}")
         return {'status': 'error', 'message': str(e)}
 
 def generate_conversation_summary(session_id):
