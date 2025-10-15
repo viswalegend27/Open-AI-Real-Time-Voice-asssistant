@@ -1,4 +1,3 @@
-"""Conversation intelligence analyzer and recommendation engine"""
 import os, json, logging
 from dotenv import load_dotenv
 from django.utils import timezone
@@ -11,8 +10,9 @@ try:
 except ImportError:
     OPENAI_CLIENT = None
 
+# function used to call OpenAI for chat completions
 def openai_chat(prompt, user_content=None, temp=0.2, fmt="json_object"):
-    if not OPENAI_CLIENT: return None
+    if not OPENAI_CLIENT: return None 
     try:
         msgs = [{"role": "system", "content": prompt}]
         if user_content:
@@ -42,13 +42,11 @@ def get_mahindra_vehicles():
         'Scorpio Classic': {'type': 'SUV', 'segment': 'workhorse', 'features': ['reliable', 'tough', 'value']},
         'Bolero': {'type': 'SUV', 'segment': 'commercial', 'features': ['tough', 'reliable', 'rural', 'commercial']},
     }
+    # sending out to OpenAI to get mahindra vehicles list
     fetched = openai_chat(prompt, temp=0.1, fmt="json_object")
     return fetched if fetched and isinstance(fetched, dict) else fallback
 
 def analyze_conversation(session_id):
-    """
-    Extract preferences, vehicle interest & features from the conversation with OpenAI.
-    """
     # use OpenAI to analyze conversation
     try:
         conv = Conversation.objects.get(session_id=session_id)
@@ -60,6 +58,7 @@ def analyze_conversation(session_id):
             '{ "budget": "number + unit or null", "usage": "primary usage (family/adventure/city/commercial) or null", "priority_features": ["list of features"], "vehicle_interest": ["model names or null"], "other_insights": "any relevant note or null" } '
             "Rules: identify only what the customer says, don't guess! Respond only with JSON."
         )
+        # gets the extracted preferences from conversation
         extracted = openai_chat(prompt, all_text, temp=0.2) or {}
         logger = logging.getLogger(__name__)
         try:
@@ -69,6 +68,7 @@ def analyze_conversation(session_id):
                 ('usage', extracted.get('usage')),
                 ('priority_features', ", ".join(str(f) for f in extracted.get('priority_features', []))) if extracted.get('priority_features') else None
             ]
+            # logging each preference being saved if not None
             for ptype, pval in filter(lambda x: x and x[1], upds):
                 logger.info(f"Saving {ptype} preference: {pval}")
                 # Django ORM update or create
@@ -91,13 +91,11 @@ def analyze_conversation(session_id):
         return {'status': 'error', 'message': str(e)}
 
 def save_message(session_id, role, content, user_id=None):
-    """
-    Save conversation message and trigger analysis every 3 messages.
-    """
     conv, _ = Conversation.objects.get_or_create(
         session_id=session_id,
         defaults={'user_id': user_id}
     )
+    # conversation message is saved on the basis of role and content
     Message.objects.create(conversation=conv, role=role, content=content)
     conv.total_messages += 1
     conv.save()
@@ -106,19 +104,17 @@ def save_message(session_id, role, content, user_id=None):
     return {'status': 'success', 'message_count': conv.total_messages}
 
 def get_recommendations(session_id):
-    """
-    Use OpenAI to recommend Mahindra vehicles based on extracted preferences dynamically.
-    LOGGING ADDED for debugging DB issues.
-    """
     import logging
     logger = logging.getLogger(__name__)
     logger.info(f"get_recommendations() called with session_id={session_id}")
     try:
+        # conversation retrieval
         conv = Conversation.objects.get(session_id=session_id)
         logger.info(f"Found Conversation: id={conv.id}")
+        # preferences and interests retrieval
         preferences = conv.preferences.all()
         logger.info(f"Preferences found: {[f'{p.preference_type}: {p.value}' for p in preferences]}")
-        interests = conv.vehicle_interests.all()
+        interests = conv.vehicle_interests.all() # all interests
         logger.info(f"Vehicle Interests: {[v.vehicle_name for v in interests]}")
         vehicles_data = json.dumps(get_mahindra_vehicles())
 
@@ -188,9 +184,6 @@ def get_recommendations(session_id):
         return {'status': 'error', 'message': str(e)}
 
 def generate_conversation_summary(session_id):
-    """
-    Generate AI-powered conversation summary with key details.
-    """
     try:
         conv = Conversation.objects.get(session_id=session_id)
         messages = conv.messages.all().order_by('timestamp')
@@ -305,9 +298,6 @@ RULES:
         return {'status': 'error', 'message': str(e)}
 
 def format_summary_for_user(summary_data, conversation, preferences, interests, recommendations):
-    """
-    Format a concise, conversational summary for the UI.
-    """
     parts = []
 
     # Budget
