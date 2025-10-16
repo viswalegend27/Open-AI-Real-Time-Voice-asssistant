@@ -3,7 +3,7 @@ import json
 import logging
 from dotenv import load_dotenv
 from django.utils import timezone
-from assistant.models import Conversation, UserPreference, VehicleInterest, Recommendation, ConversationSummary
+from assistant.models import Conversation, UserPreference, VehicleInterest, ConversationSummary
 
 load_dotenv()
 try:
@@ -122,91 +122,7 @@ def save_message(session_id, role, content, user_id=None):
     analyze_conversation(session_id)
     return {'status': 'success', 'message_count': conv.total_messages}
 
-def get_recommendations(session_id):
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"get_recommendations() called with session_id={session_id}")
-    try:
-        # conversation retrieval
-        conv = Conversation.objects.get(session_id=session_id)
-        logger.info(f"Found Conversation: id={conv.id}")
-        # preferences and interests retrieval
-        preferences = conv.preferences.all()
-        logger.info(f"Preferences found: {[f'{p.preference_type}: {p.value}' for p in preferences]}")
-        interests = conv.vehicle_interests.all() # all interests
-        logger.info(f"Vehicle Interests: {[v.vehicle_name for v in interests]}")
-        vehicles_data = json.dumps(get_mahindra_vehicles())
-
-        # Gather user preferences and vehicle interests
-        # get preferences from JSONField:
-        cleaned_prefs = {p.data.get('type'): p.data.get('value') for p in preferences}
-        vehicle_interest = [v.vehicle_name for v in interests]
-
-        prompt = f"""
-        You are a Mahindra vehicles expert. Match this customer's preferences and interests to Mahindra vehicles: {vehicles_data}
-        Preferences: {json.dumps(cleaned_prefs)}
-        Interested vehicles: {vehicle_interest}
-
-        Return a JSON object with a single key 'recommendations', whose value is a list of objects. 
-        Example format:
-        {{
-           "recommendations": [
-             {{ "vehicle_name": <name>, "why": <reason>, "score": <1-10> }},
-             ...
-           ]
-        }}
-        Only recommend from these Mahindra vehicles.
-        Be concise and specific. Never return vehicles with score < 5.
-        """
-
-        openai_recommendations = []
-        if OPENAI_CLIENT:
-            response = OPENAI_CLIENT.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are an assistant that recommends Mahindra vehicles given preferences. Always output a JSON object with a 'recommendations' array as described."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.25,
-                response_format={"type": "json_object"},
-            )
-            ai_content = json.loads(response.choices[0].message.content)
-            openai_recommendations = ai_content.get('recommendations', [])
-            logger.info(f"OpenAI recommendations returned: {openai_recommendations}")
-        else:
-            # Fallback (static)
-            for vehicle in get_mahindra_vehicles():
-                if not cleaned_prefs or vehicle in vehicle_interest:
-                    openai_recommendations.append({"vehicle_name": vehicle, "why": "In fallback mode.", "score": 5})
-            logger.info(f"Fallback recommendations: {openai_recommendations}")
-
-        recs_result = []
-        features = cleaned_prefs.get('priority_features', '').split(', ') if cleaned_prefs.get('priority_features') else []
-        for rec in openai_recommendations:
-            try:
-                # data is stored in Recommendation DB
-                obj, created = Recommendation.objects.update_or_create(
-                    conversation=conv,
-                    data__vehicle_name=rec.get("vehicle_name"),
-                    defaults={
-                        "data": {
-                            "vehicle_name": rec.get("vehicle_name"),
-                            "reason": rec.get("why", "Relevant to your preferences"),
-                            "score": rec.get("score", 5),
-                            "features": features
-                        },
-                        "created_at": timezone.now()
-                    }
-                )
-                logger.info(f"Recommendation saved: {rec.get('vehicle_name')}, created={created}")
-            except Exception as rec_exception:
-                logger.error(f"Error saving recommendation for {rec.get('vehicle_name')}: {rec_exception}")
-            recs_result.append({'vehicle': rec.get("vehicle_name"), 'score': rec.get("score", 5)})
-        logger.info(f"Recommendation process complete for session_id={session_id}")
-        return {'status': 'success', 'recommendations': sorted(recs_result, key=lambda x: x['score'], reverse=True)}
-    except Exception as e:
-        logger.error(f"get_recommendations failed: {e}")
-        return {'status': 'error', 'message': str(e)}
+# get_recommendations removed; all corresponding code and DB usage deleted.
 
 def generate_conversation_summary(session_id):
     try:
@@ -225,7 +141,6 @@ def generate_conversation_summary(session_id):
         # Get existing analysis data
         preferences = conv.preferences.all()
         interests = conv.vehicle_interests.all()
-        recommendations = conv.recommendations.all().order_by('-created_at')
 
         # Create prompt for AI summary
         prompt = f"""You are analyzing a completed sales conversation. Extract key information and insights.
@@ -278,7 +193,7 @@ RULES:
                 "vehicle_type": "SUV" if interests.exists() else None,
                 "use_case": None,
                 "priority_features": [],
-                "recommended_vehicles": [getattr(r, 'data', {}).get('vehicle_name', None) for r in recommendations[:3]],
+                "recommended_vehicles": [],  # Recommendation model removed, provide empty list.
                 "next_actions": ["Follow up with customer", "Schedule test drive"],
                 "sentiment": "positive",
                 "engagement_score": 7,
@@ -307,7 +222,7 @@ RULES:
             conv.save()
 
         # Create a user-friendly formatted summary
-        formatted_summary = format_summary_for_user(summary_data, conv, preferences, interests, recommendations)
+        formatted_summary = format_summary_for_user(summary_data, conv, preferences, interests)
 
         return {
             'status': 'success',
@@ -319,7 +234,7 @@ RULES:
     except Exception as e:
         return {'status': 'error', 'message': str(e)}
 
-def format_summary_for_user(summary_data, conversation, preferences, interests, recommendations):
+def format_summary_for_user(summary_data, conversation, preferences, interests):
     parts = []
 
     # Budget
@@ -342,9 +257,7 @@ def format_summary_for_user(summary_data, conversation, preferences, interests, 
         vehicles = [interest.vehicle_name for interest in best_interests]
         parts.append(f"Interested in: {', '.join(vehicles)}")
 
-    # Top recommendation
-    if recommendations.exists():
-        top_rec = recommendations.order_by('-match_score').first()
-        parts.append(f"Top match: {top_rec.vehicle_name}")
+    # Top recommendation (REMOVED: recommendation model & code)
+    # No recommendation info included anymore.
 
     return " | ".join(parts) if parts else "No preferences captured yet"

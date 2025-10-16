@@ -41,17 +41,7 @@ class VehicleInterest(models.Model):
     def __str__(self):
         return self.vehicle_name
 
-class Recommendation(models.Model):
-    """Stores recommendation as JSON: {'vehicle_name':..., 'reason':..., 'score':..., 'features':...}."""
-    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='recommendations')
-    data = models.JSONField(default=dict)
-    created_at = models.DateTimeField(default=timezone.now)
-
-    class Meta:
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f"{self.data.get('vehicle_name', '?')}: {self.data.get('score', '?')}"
+# Recommendation model removed as per app optimization
 
 class ConversationSummary(models.Model):
     """Stores AI-generated summary and all fields as JSON."""

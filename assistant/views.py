@@ -1,5 +1,4 @@
 """Views for Mahindra Voice Assistant API endpoints"""
-
 from django.http import JsonResponse, FileResponse
 from django.views.decorators.csrf import csrf_exempt
 from pathlib import Path
@@ -9,7 +8,7 @@ import httpx
 import logging
 from dotenv import load_dotenv
 import constants as C
-from assistant.analyzer import save_message, analyze_conversation, get_recommendations as get_recs, generate_conversation_summary
+from assistant.analyzer import save_message, analyze_conversation, generate_conversation_summary
 from assistant.models import Conversation, VehicleInterest
 
 load_dotenv()
@@ -81,11 +80,7 @@ def create_realtime_session(request):
         logger.error(f"Session creation failed: {e}", exc_info=True)
         return _json_error(str(e), 500)
 
-# Health check endpoint
-@csrf_exempt
-def health_check(request):
-    """Health check"""
-    return JsonResponse({"status": "ok", "agent": C.AI_AGENT_NAME, "model": OPENAI_MODEL, "voice": OPENAI_VOICE})
+# Health check endpoint removed; not used in core application
 
 # Save a conversation message
 # API Endpoint: /api/conversation
@@ -114,16 +109,7 @@ def get_analysis(request):
     result = analyze_conversation(session_id)
     return JsonResponse(result)
 
-# Get vehicle recommendations
-# API Endpoint: /api/get-recommendations
-@csrf_exempt
-def get_recommendations(request):
-    """Get vehicle recommendations"""
-    session_id = _get_session_id(request)
-    if not session_id:
-        return _json_error("session_id required", 400)
-    result = get_recs(session_id)
-    return JsonResponse(result)
+# Vehicle Recommendation endpoint removed (model & logic gone)
 
 # Generate a conversation summary
 # API Endpoint: /api/generate-summary
