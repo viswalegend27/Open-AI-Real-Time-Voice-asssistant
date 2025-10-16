@@ -10,7 +10,7 @@ import logging
 from dotenv import load_dotenv
 import constants as C
 from assistant.analyzer import save_message, analyze_conversation, get_recommendations as get_recs, generate_conversation_summary
-from assistant.models import Conversation
+from assistant.models import Conversation, VehicleInterest
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -181,3 +181,21 @@ def get_summary(request, session_id):
     except Exception as e:
         logger.error(f"get_summary error: {e}", exc_info=True)
         return _json_error(str(e), 500)
+
+# Admin: List all vehicle interests
+@csrf_exempt
+def list_vehicle_interests(request):
+    """Admin endpoint to list all vehicle interests"""
+    interests = VehicleInterest.objects.select_related('conversation').all().order_by('-timestamp')
+    data = []
+    for vi in interests:
+        data.append({
+            "id": vi.id,
+            "vehicle_name": vi.vehicle_name,
+            "interest_level": vi.interest_level,
+            "mentioned_features": vi.mentioned_features,
+            "timestamp": vi.timestamp.isoformat(),
+            "conversation_id": vi.conversation.session_id,
+            "user_id": vi.conversation.user_id,
+        })
+    return JsonResponse({"vehicle_interests": data})

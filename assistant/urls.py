@@ -11,4 +11,7 @@ urlpatterns = [
     path('api/generate-summary', views.generate_summary),  # Generate new summary
     path('api/summary/<str:session_id>/', views.get_summary),  # Get existing summary
     path('health', views.health_check),
+
+    # Admin API for vehicle interests
+    path('api/vehicle-interests/', views.list_vehicle_interests, name='list_vehicle_interests'),
 ]

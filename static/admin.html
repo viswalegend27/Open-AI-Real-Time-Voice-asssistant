@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin - Vehicle Interests</title>
+</head>
+<body>
+    <h1>Viewer Vehicle Interests (Admin)</h1>
+    <table id="interestsTable" border="1">
+        <thead>
+            <tr>
+                <th>ID</th><th>User ID</th><th>Conversation</th><th>Vehicle</th>
+                <th>Level</th><th>Features</th><th>Timestamp</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <script src="js/app.js"></script> <!-- In case you have shared JS logic -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        fetch('/api/vehicle-interests/')
+            .then(res => res.json())
+            .then(data => {
+                const tbody = document.querySelector('#interestsTable tbody');
+                if (!data.vehicle_interests || data.vehicle_interests.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7">No vehicle interests found.</td></tr>';
+                } else {
+                    tbody.innerHTML = '';
+                    data.vehicle_interests.forEach(interest => {
+                        tbody.innerHTML += `<tr>
+                            <td>${interest.id}</td>
+                            <td>${interest.user_id || ''}</td>
+                            <td>${interest.conversation_id}</td>
+                            <td>${interest.vehicle_name}</td>
+                            <td>${interest.interest_level}</td>
+                            <td>${JSON.stringify(interest.mentioned_features)}</td>
+                            <td>${interest.timestamp}</td>
+                        </tr>`;
+                    });
+                }
+            })
+            .catch(() => {
+                document.querySelector('#interestsTable tbody')
+                    .innerHTML = '<tr><td colspan="7">Failed to load data.</td></tr>';
+            });
+    });
+    </script>
+</body>
+</html>
