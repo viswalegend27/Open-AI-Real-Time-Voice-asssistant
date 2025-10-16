@@ -1,7 +1,9 @@
-import os, json, logging
+import os
+import json
+import logging
 from dotenv import load_dotenv
 from django.utils import timezone
-from assistant.models import Conversation, Message, UserPreference, VehicleInterest, Recommendation, ConversationSummary
+from assistant.models import Conversation, UserPreference, VehicleInterest, Recommendation, ConversationSummary
 
 load_dotenv()
 try:
@@ -10,20 +12,23 @@ try:
 except ImportError:
     OPENAI_CLIENT = None
 
-# function used to call OpenAI for chat completions
 def openai_chat(prompt, user_content=None, temp=0.2, fmt="json_object"):
-    if not OPENAI_CLIENT: return None 
+    """Utility to query OpenAI for JSON response."""
+    if not OPENAI_CLIENT:
+        return None
     try:
         msgs = [{"role": "system", "content": prompt}]
         if user_content:
             msgs.append({"role": "user", "content": user_content})
-        return json.loads(OPENAI_CLIENT.chat.completions.create(
+        resp = OPENAI_CLIENT.chat.completions.create(
             model="gpt-4o-mini",
             messages=msgs,
             temperature=temp,
             response_format={"type": fmt}
-        ).choices[0].message.content)
-    except Exception:
+        )
+        return json.loads(resp.choices[0].message.content)
+    except Exception as e:
+        logging.getLogger(__name__).error(f"openai_chat error: {e}")
         return None
 
 def get_mahindra_vehicles():
@@ -50,8 +55,9 @@ def analyze_conversation(session_id):
     # use OpenAI to analyze conversation
     try:
         conv = Conversation.objects.get(session_id=session_id)
-        messages = conv.messages.all().order_by('timestamp')
-        user_messages = [m.content for m in messages if m.role == 'user']
+        # messages = conv.messages.all().order_by('timestamp')
+        messages = conv.messages_json or []
+        user_messages = [m['content'] for m in messages if m['role'] == 'user']
         all_text = "\n".join(f"Customer: {m}" for m in user_messages)
         prompt = (
             "You are an expert car sales assistant AI. Analyze the customer conversation and return a JSON always containing: "
@@ -71,35 +77,48 @@ def analyze_conversation(session_id):
             # logging each preference being saved if not None
             for ptype, pval in filter(lambda x: x and x[1], upds):
                 logger.info(f"Saving {ptype} preference: {pval}")
-                # Django ORM update or create
+                # Use the new JSONField structure
                 UserPreference.objects.update_or_create(
-                    conversation=conv, preference_type=ptype,
-                    defaults={"value": str(pval), "confidence": 0.8}
+                    conversation=conv, data__type=ptype,
+                    defaults={
+                        "data": {"type": ptype, "value": str(pval), "confidence": 0.8},
+                        "extracted_at": timezone.now()
+                    }
                 )
         except Exception as e:
             logger.error(f"UserPreference DB store error: {e}")
         if extracted.get("vehicle_interest"):
-            # our vehicle interest DB store
+            # Use new meta field for interest_level/features
             for vehicle in extracted["vehicle_interest"]:
-                # Django ORM update or create
                 VehicleInterest.objects.update_or_create(
                     conversation=conv, vehicle_name=vehicle,
-                    defaults={"interest_level":8}
+                    defaults={
+                        "meta": {"interest_level": 8},
+                        "timestamp": timezone.now()
+                    }
                 )
         return {'status': 'success', 'preferences_extracted': conv.preferences.count(), 'extracted': extracted}
     except Exception as e:
         return {'status': 'error', 'message': str(e)}
 
 def save_message(session_id, role, content, user_id=None):
+    """
+    Appends user or assistant message to conversation history as JSON and triggers analysis.
+    """
     conv, _ = Conversation.objects.get_or_create(
         session_id=session_id,
         defaults={'user_id': user_id}
     )
-    # conversation message is saved on the basis of role and content
-    Message.objects.create(conversation=conv, role=role, content=content)
-    conv.total_messages += 1
-    conv.save()
-    # Always analyze - update preferences every message
+    conv.refresh_from_db()
+    messages = list(conv.messages_json or [])
+    messages.append({
+        'role': role,
+        'content': content,
+        'timestamp': timezone.now().isoformat()
+    })
+    conv.messages_json = messages
+    conv.total_messages = len(messages)
+    conv.save(update_fields=['messages_json', 'total_messages'])
     analyze_conversation(session_id)
     return {'status': 'success', 'message_count': conv.total_messages}
 
@@ -119,7 +138,8 @@ def get_recommendations(session_id):
         vehicles_data = json.dumps(get_mahindra_vehicles())
 
         # Gather user preferences and vehicle interests
-        cleaned_prefs = {p.preference_type: p.value for p in preferences}
+        # get preferences from JSONField:
+        cleaned_prefs = {p.data.get('type'): p.data.get('value') for p in preferences}
         vehicle_interest = [v.vehicle_name for v in interests]
 
         prompt = f"""
@@ -167,14 +187,18 @@ def get_recommendations(session_id):
                 # data is stored in Recommendation DB
                 obj, created = Recommendation.objects.update_or_create(
                     conversation=conv,
-                    vehicle_name=rec.get("vehicle_name"),
+                    data__vehicle_name=rec.get("vehicle_name"),
                     defaults={
-                        'match_score': rec.get("score", 5),
-                        'reason': rec.get("why", "Relevant to your preferences"),
-                        'features_matched': features
+                        "data": {
+                            "vehicle_name": rec.get("vehicle_name"),
+                            "reason": rec.get("why", "Relevant to your preferences"),
+                            "score": rec.get("score", 5),
+                            "features": features
+                        },
+                        "created_at": timezone.now()
                     }
                 )
-                logger.info(f"Recommendation saved: {obj.vehicle_name}, created={created}")
+                logger.info(f"Recommendation saved: {rec.get('vehicle_name')}, created={created}")
             except Exception as rec_exception:
                 logger.error(f"Error saving recommendation for {rec.get('vehicle_name')}: {rec_exception}")
             recs_result.append({'vehicle': rec.get("vehicle_name"), 'score': rec.get("score", 5)})
@@ -187,21 +211,21 @@ def get_recommendations(session_id):
 def generate_conversation_summary(session_id):
     try:
         conv = Conversation.objects.get(session_id=session_id)
-        messages = conv.messages.all().order_by('timestamp')
+        messages = conv.messages_json or []
 
-        if messages.count() == 0:
+        if not messages:
             return {'status': 'error', 'message': 'No messages found'}
 
         # Build conversation transcript
         transcript = ""
         for msg in messages:
-            role_label = "Customer" if msg.role == "user" else "Ishmael"
-            transcript += f"{role_label}: {msg.content}\n\n"
+            role_label = "Customer" if msg['role'] == "user" else "Ishmael"
+            transcript += f"{role_label}: {msg['content']}\n\n"
 
         # Get existing analysis data
         preferences = conv.preferences.all()
         interests = conv.vehicle_interests.all()
-        recommendations = conv.recommendations.all().order_by('-match_score')
+        recommendations = conv.recommendations.all().order_by('-created_at')
 
         # Create prompt for AI summary
         prompt = f"""You are analyzing a completed sales conversation. Extract key information and insights.
@@ -247,36 +271,33 @@ RULES:
             summary_data = json.loads(response.choices[0].message.content)
         else:
             summary_data = {
-                "summary": f"Conversation with {messages.count()} messages. Customer showed interest in Mahindra vehicles.",
+                "summary": f"Conversation with {len(messages)} messages. Customer showed interest in Mahindra vehicles.",
                 "customer_name": None,
                 "contact_info": None,
-                "budget_range": preferences.filter(preference_type='budget').first().value if preferences.filter(preference_type='budget').exists() else None,
+                "budget_range": None,
                 "vehicle_type": "SUV" if interests.exists() else None,
-                "use_case": preferences.filter(preference_type='usage').first().value if preferences.filter(preference_type='usage').exists() else None,
+                "use_case": None,
                 "priority_features": [],
-                "recommended_vehicles": [r.vehicle_name for r in recommendations[:3]],
+                "recommended_vehicles": [getattr(r, 'data', {}).get('vehicle_name', None) for r in recommendations[:3]],
                 "next_actions": ["Follow up with customer", "Schedule test drive"],
                 "sentiment": "positive",
                 "engagement_score": 7,
                 "purchase_intent": "medium"
             }
+            # Safely set budget and use_case from JSONField
+            for pref in preferences:
+                if pref.data.get('type') == 'budget' and summary_data['budget_range'] is None:
+                    summary_data['budget_range'] = pref.data.get('value')
+                elif pref.data.get('type') == 'usage' and summary_data['use_case'] is None:
+                    summary_data['use_case'] = pref.data.get('value')
 
         # Save summary to database
+        # Save everything in one data object for summary
         summary, _ = ConversationSummary.objects.update_or_create(
             conversation=conv,
             defaults={
-                'summary_text': summary_data.get('summary', ''),
-                'customer_name': summary_data.get('customer_name'),
-                'contact_info': summary_data.get('contact_info'),
-                'budget_range': summary_data.get('budget_range'),
-                'vehicle_type': summary_data.get('vehicle_type'),
-                'use_case': summary_data.get('use_case'),
-                'priority_features': summary_data.get('priority_features', []),
-                'recommended_vehicles': summary_data.get('recommended_vehicles', []),
-                'next_actions': summary_data.get('next_actions', []),
-                'sentiment': summary_data.get('sentiment'),
-                'engagement_score': summary_data.get('engagement_score', 5),
-                'purchase_intent': summary_data.get('purchase_intent')
+                'data': summary_data,
+                'generated_at': timezone.now()
             }
         )
 
@@ -302,20 +323,23 @@ def format_summary_for_user(summary_data, conversation, preferences, interests, 
     parts = []
 
     # Budget
-    budget_pref = preferences.filter(preference_type='budget').first()
-    budget = budget_pref.value if budget_pref else summary_data.get('budget_range')
+    # Get budget and usage from JSONField
+    budget = None
+    use_case = None
+    for pref in preferences:
+        if pref.data.get('type') == 'budget' and budget is None:
+            budget = pref.data.get('value')
+        elif pref.data.get('type') == 'usage' and use_case is None:
+            use_case = pref.data.get('value')
     if budget:
         parts.append(f"Budget: {budget}")
-
-    # Use case
-    usage_pref = preferences.filter(preference_type='usage').first()
-    use_case = usage_pref.value if usage_pref else summary_data.get('use_case')
     if use_case:
         parts.append(f"Use: {use_case}")
 
     # Interested vehicles
     if interests.exists():
-        vehicles = [interest.vehicle_name for interest in interests.order_by('-interest_level')[:2]]
+        best_interests = interests.order_by('-meta__interest_level')[:2]
+        vehicles = [interest.vehicle_name for interest in best_interests]
         parts.append(f"Interested in: {', '.join(vehicles)}")
 
     # Top recommendation
