@@ -164,6 +164,7 @@ def get_recommendations(session_id):
         features = cleaned_prefs.get('priority_features', '').split(', ') if cleaned_prefs.get('priority_features') else []
         for rec in openai_recommendations:
             try:
+                # data is stored in Recommendation DB
                 obj, created = Recommendation.objects.update_or_create(
                     conversation=conv,
                     vehicle_name=rec.get("vehicle_name"),
