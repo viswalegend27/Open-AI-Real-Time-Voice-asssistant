@@ -265,7 +265,34 @@
               updateAITranscript(result.formatted_summary);
               await saveMessageToDatabase('assistant', result.formatted_summary);
               updateStatus('Connected! How can I help you?', 'success');
-  
+
+              // Delay clean-up/stop until TTS (audio) for summary has finished playing
+              if (!state.pendingSessionClosure) state.pendingSessionClosure = false;
+              if (state.awaitingSessionClosure) state.awaitingSessionClosure = false;
+              if (window && aiAudioEl) {
+                // Set flag so audio event only runs this once
+                state.pendingSessionClosure = true;
+                console.log("[DEBUG] Set pendingSessionClosure=true, adding audio ended listener");
+                aiAudioEl.addEventListener('ended', function onAudioEnd() {
+                  console.log("[DEBUG] audio ended event fired, pendingSessionClosure?", state.pendingSessionClosure);
+                  if (state.pendingSessionClosure) {
+                    stopConversation(true);
+                    state.pendingSessionClosure = false;
+                    console.log("[DEBUG] stopConversation(true) called by audio ended event");
+                  }
+                  aiAudioEl.removeEventListener('ended', onAudioEnd);
+                }, { once: true });
+              }
+
+              // Fallback: if audio never fires .ended, force session end after 8s (for debug/demo only)
+              setTimeout(() => {
+                if (state.pendingSessionClosure) {
+                  stopConversation(true);
+                  state.pendingSessionClosure = false;
+                  console.log("[DEBUG] Fallback: timed stopConversation executed after waiting for summary TTS");
+                }
+              }, 8000);
+
               state.summaryInProgress = false;
               state.summaryCallId = null;
               return result;
