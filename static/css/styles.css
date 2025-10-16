@@ -468,3 +468,26 @@ body::before {
 button:focus {
     outline: 3px solid var(--mahindra-red-light);
 }
+
+/* ===== Placeholder styling ===== */
+.transcript-content:empty::before {
+    content: " "; /* default blank, overridden below */
+    color: #6b7280;
+    font-style: italic;
+    display: block;
+    text-align: center;
+    padding: 1.5rem;
+    opacity: 0.8;
+    pointer-events: none;
+  }
+  
+  /* Customer placeholder */
+  #userTranscript:empty::before {
+    content: "🚙 Click \"Start Conversation\" and tell me what you're looking for...";
+  }
+  
+  /* AI placeholder */
+  #aiTranscript:empty::before {
+    content: "💬 I'll help you find the perfect Mahindra vehicle...";
+  }
+  

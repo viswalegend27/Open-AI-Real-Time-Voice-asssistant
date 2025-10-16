@@ -41,8 +41,6 @@ class VehicleInterest(models.Model):
     def __str__(self):
         return self.vehicle_name
 
-# Recommendation model removed as per app optimization
-
 class ConversationSummary(models.Model):
     """Stores AI-generated summary and all fields as JSON."""
     conversation = models.OneToOneField(Conversation, on_delete=models.CASCADE, related_name='summary')
