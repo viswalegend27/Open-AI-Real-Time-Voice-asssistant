@@ -25,7 +25,7 @@ class Message(models.Model):
     timestamp = models.DateTimeField(default=timezone.now)
     
     class Meta:
-        ordering = ['timestamp']
+        ordering = ['timestamp'] # no
         
     def __str__(self):
         return f"{self.role}: {self.content[:50]}"
