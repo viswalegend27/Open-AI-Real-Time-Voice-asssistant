@@ -3,3 +3,4 @@ django-cors-headers>=4.3.0
 python-dotenv
 openai
 httpx
+redis
