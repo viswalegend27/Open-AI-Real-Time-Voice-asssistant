@@ -175,7 +175,7 @@
   async function saveMessageToDatabase(role, content) {
   if (!state.sessionId || !content) return;
     try {
-      // -- [API CALL - /api/conversation] --
+      // -- [TOOL CALL - /api/conversation] --
     await fetch('/api/conversation', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -194,14 +194,18 @@
   // -----------------------
   async function handleFunctionCall(functionName, args = {}, callId = null) {
   log('Function call:', functionName, args, 'callId:', callId);
+  // generate conversation summary function handler
   if (functionName === 'generate_conversation_summary') {
   const callSessionId = (args?.session_id && args.session_id !== 'current_conversation') ? args.session_id : state.sessionId;
   if (!callSessionId) {
+  // It is an predefined transcript message when no session exists.
+  // Occurs when user tries to get summary before any conversation. Due to this no AI audio is played.
   updateAITranscript("Ishmael: We need to have a conversation first before I can generate a summary. Please tell me about your vehicle requirements!");
   updateStatus('Ready', 'info');
   return { status: 'no_session' };
   }
   
+  // Summart in progress check
   if (state.summaryInProgress && callId && state.summaryCallId === callId) {
   log('Summary already in progress for same call id, skipping...');
   return { status: 'in_progress' };
@@ -212,44 +216,44 @@
   updateStatus('Generating summary...', 'warning');
   
   try {
+  // -- [TOOL CALL - /api/generate-summary] --
   const res = await fetch('/api/generate-summary', {
-  method: 'POST',
-  headers: {'Content-Type': 'application/json'},
-  body: JSON.stringify({ session_id: callSessionId })
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ session_id: callSessionId })
   });
   if (!res.ok) {
-  const t = await res.text();
-  throw new Error(t || `Status ${res.status}`);
+    const t = await res.text();
+    throw new Error(t || `Status ${res.status}`);
   }
   const result = await res.json();
   log('Summary result:', result);
   
   if (result.status === 'success' && result.formatted_summary) {
+  // Function response via dataChannel.
   if (state.dataChannel?.readyState === 'open' && callId) {
   const functionResponse = {
-  type: 'conversation.item.create',
-  item: {
-  type: 'function_call_output',
-  call_id: callId,
-  output: JSON.stringify({
-  status: 'success',
-  message: "Summary generated successfully. Here's what we discussed:",
-  summary_text: result.summary?.summary || 'Summary generated'
-  })
-  }
-  };
+    type: 'conversation.item.create',
+    item: {
+    type: 'function_call_output',
+    call_id: callId,
+    output: JSON.stringify({
+    status: 'success',
+    message: "Summary generated successfully. Here's what we discussed:",
+    summary_text: result.summary?.summary || 'Summary generated'
+  })}};
   try {
   state.dataChannel.send(JSON.stringify(functionResponse));
   state.dataChannel.send(JSON.stringify({ type: 'response.create' }));
   } catch (e) {
   warn('Failed to send function response via dataChannel', e);
-  }
-  }
+  }}
   updateAITranscript(result.formatted_summary);
   await saveMessageToDatabase('assistant', result.formatted_summary);
   updateStatus('Connected! How can I help you?', 'success');
   
   state.pendingSessionClosure = true;
+  // AI audio end or timeout triggers session closure
   aiAudioEl.addEventListener('ended', function onAudioEnd() {
   if (state.pendingSessionClosure) {
   stopConversation(true);
@@ -258,12 +262,13 @@
   aiAudioEl.removeEventListener('ended', onAudioEnd);
   }, { once: true });
   
+  // Session auto-close timeout (in case no audio is played)
   setTimeout(() => {
   if (state.pendingSessionClosure) {
   stopConversation(true);
   state.pendingSessionClosure = false;
   }
-  }, 10000);
+  }, 12000);
   
   state.summaryInProgress = false;
   state.summaryCallId = null;
@@ -284,11 +289,12 @@
   updateStatus('Connected! How can I help you?', 'success');
   updateAITranscript("Ishmael: I'd be happy to provide a summary once we've had a proper conversation! Please tell me about your vehicle requirements - budget, usage, preferences - and I'll give you personalized recommendations.");
   return { error: (error && error.message) || String(error) };
-  }
-  }
+  }}
   
+  // Placeholder handlers for other function calls
+  // Currently just acknowledge them, not sure this code is useful or not. Since no such functions are defined yet.
   if (['analyze_user_needs', 'get_user_recommendations'].includes(functionName)) {
-  log(`${functionName} acknowledged`);
+    log(`${functionName} acknowledged`);
   return { status: 'acknowledged' };
   }
   
