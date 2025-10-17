@@ -9,11 +9,10 @@ import logging
 from dotenv import load_dotenv
 import constants as C
 from assistant.analyzer import save_message, analyze_conversation, generate_conversation_summary
-from assistant.models import Conversation, VehicleInterest
+from assistant.models import Conversation
 
 load_dotenv()
 logger = logging.getLogger(__name__)
-
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY not set in .env file")
@@ -23,14 +22,10 @@ OPENAI_VOICE = os.getenv("OPENAI_REALTIME_VOICE", C.DEFAULT_VOICE)
 OPENAI_TRANSCRIBE = os.getenv("TRANSCRIBE_MODEL", C.DEFAULT_TRANSCRIBE_MODEL)
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
-# --- Helper Utilities ---
 def _json_error(message, status=400):
     return JsonResponse({"error": message}, status=status)
 
 def _parse_body(request):
-    """
-    Return a dict from JSON body (if any), else empty dict.
-    """
     if hasattr(request, "body") and request.body:
         try:
             return json.loads(request.body)
@@ -39,7 +34,6 @@ def _parse_body(request):
     return {}
 
 def _get_session_id(request):
-    # Accepts session_id from GET, POST, or JSON body
     session_id = request.GET.get('session_id') or request.POST.get('session_id')
     if not session_id:
         data = _parse_body(request)
@@ -47,18 +41,13 @@ def _get_session_id(request):
     return session_id
 
 def read_root(request):
-    """Serve main interface HTML"""
     html_file = STATIC_DIR / "index_new.html"
     if html_file.exists():
         return FileResponse(open(html_file, 'rb'))
     return _json_error("HTML not found", 404)
 
-
-# Handle creating a new OpenAI real-time session
-# API Endpoint: /api/session
 @csrf_exempt
 def create_realtime_session(request):
-    """Create OpenAI session"""
     payload = C.get_session_payload()
     payload.update({"model": OPENAI_MODEL, "voice": OPENAI_VOICE, "input_audio_transcription": {"model": OPENAI_TRANSCRIBE}})
     logger.info(f"Creating session | model={OPENAI_MODEL} | voice={OPENAI_VOICE}")
@@ -70,23 +59,18 @@ def create_realtime_session(request):
         }
         with httpx.Client(timeout=20.0) as client:
             response = client.post(C.get_realtime_session_url(), headers=headers, json=payload)
-        if response.status_code != 200:
-            logger.error(f"OpenAI error ({response.status_code}): {response.text}")
-            return _json_error(f"Session error: {response.text}", response.status_code)
-        data = response.json()
-        logger.info(f"Session created | id={data.get('id')}")
-        return JsonResponse(data)
+            if response.status_code != 200:
+                logger.error(f"OpenAI error ({response.status_code}): {response.text}")
+                return _json_error(f"Session error: {response.text}", response.status_code)
+            data = response.json()
+            logger.info(f"Session created | id={data.get('id')}")
+            return JsonResponse(data)
     except Exception as e:
         logger.error(f"Session creation failed: {e}", exc_info=True)
         return _json_error(str(e), 500)
 
-# Health check endpoint removed; not used in core application
-
-# Save a conversation message
-# API Endpoint: /api/conversation
 @csrf_exempt
 def save_conversation(request):
-    """Save conversation message"""
     try:
         data = _parse_body(request)
         session_id, role, content = data.get('session_id'), data.get('role'), data.get('content')
@@ -98,24 +82,16 @@ def save_conversation(request):
         logger.error(f"save_conversation error: {e}", exc_info=True)
         return _json_error(str(e), 500)
 
-# Get analysis of a conversation
-# API Endpoint: /api/analysis
 @csrf_exempt
 def get_analysis(request):
-    """Get conversation analysis"""
     session_id = _get_session_id(request)
     if not session_id:
         return _json_error("session_id required", 400)
     result = analyze_conversation(session_id)
     return JsonResponse(result)
 
-# Vehicle Recommendation endpoint removed (model & logic gone)
-
-# Generate a conversation summary
-# API Endpoint: /api/generate-summary
 @csrf_exempt
 def generate_summary(request):
-    """Generate AI-powered conversation summary"""
     session_id = _get_session_id(request)
     if not session_id:
         return _json_error("session_id required", 400)
@@ -124,11 +100,8 @@ def generate_summary(request):
         result['display_text'] = result['formatted_summary']
     return JsonResponse(result)
 
-# Retrieve an existing conversation summary
-# API Endpoint: /api/get-summary/<session_id>
 @csrf_exempt
 def get_summary(request, session_id):
-    """Retrieve existing conversation summary"""
     try:
         conv = Conversation.objects.get(session_id=session_id)
         summary = getattr(conv, 'summary', None)
@@ -136,18 +109,18 @@ def get_summary(request, session_id):
             return JsonResponse({
                 "status": "success",
                 "summary": {
-                    "text": summary.summary_text,
-                    "customer_name": summary.customer_name,
-                    "contact_info": summary.contact_info,
-                    "budget_range": summary.budget_range,
-                    "vehicle_type": summary.vehicle_type,
-                    "use_case": summary.use_case,
-                    "priority_features": summary.priority_features,
-                    "recommended_vehicles": summary.recommended_vehicles,
-                    "next_actions": summary.next_actions,
-                    "sentiment": summary.sentiment,
-                    "engagement_score": summary.engagement_score,
-                    "purchase_intent": summary.purchase_intent,
+                    "text": summary.data.get("summary"),
+                    "customer_name": summary.data.get("customer_name"),
+                    "contact_info": summary.data.get("contact_info"),
+                    "budget_range": summary.data.get("budget_range"),
+                    "vehicle_type": summary.data.get("vehicle_type"),
+                    "use_case": summary.data.get("use_case"),
+                    "priority_features": summary.data.get("priority_features", []),
+                    "recommended_vehicles": summary.data.get("recommended_vehicles", []),
+                    "next_actions": summary.data.get("next_actions", []),
+                    "sentiment": summary.data.get("sentiment"),
+                    "engagement_score": summary.data.get("engagement_score"),
+                    "purchase_intent": summary.data.get("purchase_intent"),
                     "generated_at": summary.generated_at.isoformat()
                 },
                 "conversation": {
@@ -168,20 +141,17 @@ def get_summary(request, session_id):
         logger.error(f"get_summary error: {e}", exc_info=True)
         return _json_error(str(e), 500)
 
-# Admin: List all vehicle interests
 @csrf_exempt
 def list_vehicle_interests(request):
-    """Admin endpoint to list all vehicle interests"""
+    from assistant.models import VehicleInterest
     interests = VehicleInterest.objects.select_related('conversation').all().order_by('-timestamp')
-    data = []
-    for vi in interests:
-        data.append({
-            "id": vi.id,
-            "vehicle_name": vi.vehicle_name,
-            "interest_level": vi.interest_level,
-            "mentioned_features": vi.mentioned_features,
-            "timestamp": vi.timestamp.isoformat(),
-            "conversation_id": vi.conversation.session_id,
-            "user_id": vi.conversation.user_id,
-        })
+    data = [{
+        "id": vi.id,
+        "vehicle_name": vi.vehicle_name,
+        "interest_level": vi.meta.get("interest_level"),
+        "mentioned_features": vi.meta.get("mentioned_features", []),
+        "timestamp": vi.timestamp.isoformat(),
+        "conversation_id": vi.conversation.session_id,
+        "user_id": vi.conversation.user_id,
+    } for vi in interests]
     return JsonResponse({"vehicle_interests": data})
