@@ -15,20 +15,20 @@
   // App State
   // -----------------------
   const state = {
-  sessionId: null,
-  peerConnection: null,
-  dataChannel: null,
-  audioStream: null,
-  isStreaming: false,
-  committedTranscript: '',
-  streamingLine: '',
-  streamingPrefix: 'Ishmael: ',
-  currentAIResponse: '',
-  summaryInProgress: false,
-  summaryCallId: null,
-  summaryIntroComplete: false,
-  pendingRaf: null,
-  networkAbortController: null
+      sessionId: null,
+      peerConnection: null,
+      dataChannel: null,
+      audioStream: null,
+      isStreaming: false,
+      committedTranscript: '',
+      streamingLine: '',
+      streamingPrefix: 'Ishmael: ',
+      currentAIResponse: '',
+      summaryInProgress: false,
+      summaryCallId: null,
+      summaryIntroComplete: false,
+      pendingRaf: null,
+      networkAbortController: null
   };
   
   // -----------------------
@@ -39,54 +39,47 @@
   function err(...args) { console.error('Ishmael:', ...args); }
   
   function generateSessionId() {
-  return `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    // OpenAI session IDs have to be unique per session. 
+    return `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   }
   
   function safeJson(text, fallback = {}) {
-  try { return JSON.parse(text); } catch (_) { return fallback; }
+    // Safely parse JSON, return fallback on error.
+    // If syntax error, return fallback.
+    try { return JSON.parse(text); } catch (_) { return fallback; }
   }
-  
-  async function fetchJson(url, opts = {}) {
-  if (state.networkAbortController) {
-  state.networkAbortController.abort();
-  }
-  state.networkAbortController = new AbortController();
-  opts.signal = state.networkAbortController.signal;
-  opts.headers = {...(opts.headers || {}), 'Content-Type': 'application/json'};
-  const res = await fetch(url, opts);
-  if (!res.ok) {
-  const t = await res.text();
-  throw new Error(`${res.status} ${res.statusText} - ${t}`);
-  }
-  try { return await res.json(); } catch (e) { return null; }
-  }
-  
+
   // -----------------------
   // Status & transcript UI
   // -----------------------
   const ICONS = { success: '✅', error: '❌', warning: '⏳', info: '🚗' };
   
+  // An simple status updater
   function updateStatus(message, type = 'info') {
   if (!statusEl) return;
   statusEl.textContent = `${ICONS[type] || ICONS.info} ${message}`;
   statusEl.className = 'status';
-  statusEl.classList.toggle('status-error', type === 'error');
-  statusEl.classList.toggle('status-success', type === 'success');
-  statusEl.classList.toggle('status-warning', type === 'warning');
+    statusEl.classList.toggle('status-error', type === 'error');
+    statusEl.classList.toggle('status-success', type === 'success');
+    statusEl.classList.toggle('status-warning', type === 'warning');
   }
-  
+
+  // Utility function to append text to an element
+  // In this case, used for both user and AI transcripts 
   function appendToElement(el, text) {
   if (!el) return;
-  if (el.classList.contains('empty')) el.classList.remove('empty');
-  el.textContent += `${text}\n`;
-  el.scrollTop = el.scrollHeight;
+    if (el.classList.contains('empty')) el.classList.remove('empty');
+      el.textContent += `${text}\n`;
+      el.scrollTop = el.scrollHeight;
   }
   
+  // Making sure the entire text is set properly
+  // Reset after streaming updates
   function setElementText(el, text) {
   if (!el) return;
-  if (el.classList.contains('empty')) el.classList.remove('empty');
-  el.textContent = text;
-  el.scrollTop = el.scrollHeight;
+    if (el.classList.contains('empty')) el.classList.remove('empty');
+      el.textContent = text;
+      el.scrollTop = el.scrollHeight;
   }
   
   function updateUserTranscript(text) {
@@ -97,32 +90,38 @@
   appendToElement(aiTranscriptEl, text);
   }
   
+  // Responsible for scheduling AI transcript rendering even while mid-sentence audio responses
   function scheduleAIRender() {
+  // Called whenever streaming line updates
   if (state.pendingRaf) return;
   state.pendingRaf = requestAnimationFrame(() => {
-  state.pendingRaf = null;
-  let render = '';
-  if (state.committedTranscript) {
-  render = state.committedTranscript + (state.streamingLine ? `\n${state.streamingPrefix}${state.streamingLine}` : '');
-  } else {
-  render = state.streamingLine ? `${state.streamingPrefix}${state.streamingLine}` : '';
-  }
-  setElementText(aiTranscriptEl, render ? `${render}\n` : '');
+    state.pendingRaf = null;
+      let render = '';
+        if (state.committedTranscript) {
+          render = state.committedTranscript + (state.streamingLine ? `\n${state.streamingPrefix}${state.streamingLine}` : '');
+    }   else {
+    render = state.streamingLine ? `${state.streamingPrefix}${state.streamingLine}` : '';
+    }
+      setElementText(aiTranscriptEl, render ? `${render}\n` : '');
   });
   }
   
   // -----------------------
   // Streaming Transcript API
   // -----------------------
+
+  // Make our transcript and state are correctly reset/synced before getting new data from AI
   function startStreamingResponse(prefix = 'Ishmael: ') {
   state.streamingPrefix = prefix;
-  if (aiTranscriptEl?.classList.contains('empty')) {
-  aiTranscriptEl.classList.remove('empty');
-  setElementText(aiTranscriptEl, '');
-  state.committedTranscript = '';
-  } else {
-  state.committedTranscript = (aiTranscriptEl?.textContent || '').replace(/\n+$/, '');
-  }
+    if (aiTranscriptEl?.classList.contains('empty')) {
+      // If empty, make the internal transcript also empty
+      aiTranscriptEl.classList.remove('empty');
+      setElementText(aiTranscriptEl, '');
+      state.committedTranscript = '';
+    }   else {
+      // Else stream our response
+    state.committedTranscript = (aiTranscriptEl?.textContent || '').replace(/\n+$/, '');
+    }
   state.streamingLine = '';
   state.currentAIResponse = '';
   state.isStreaming = true;
@@ -172,19 +171,21 @@
   // -----------------------
   // DB Save wrapper
   // -----------------------
+  // Used to save user and AI messages to backend. As JSON
   async function saveMessageToDatabase(role, content) {
   if (!state.sessionId || !content) return;
-  try {
-  await fetch('/api/conversation', {
-  method: 'POST',
-  headers: {'Content-Type': 'application/json'},
-  body: JSON.stringify({ session_id: state.sessionId, role, content })
-  }).then(res => {
-  if (!res.ok) return res.text().then(t => { throw new Error(t || res.status); });
-  log(`Saved ${role}`);
-  });
-  } catch (e) {
-  warn('Failed to save message:', e);
+    try {
+      // -- [API CALL - /api/conversation] --
+    await fetch('/api/conversation', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ session_id: state.sessionId, role, content })
+    }).then(res => {
+    if (!res.ok) return res.text().then(t => { throw new Error(t || res.status); });
+    log(`Saved ${role}`);
+    });
+    }   catch (e) {
+    warn('Failed to save message:', e);
   }
   }
   
