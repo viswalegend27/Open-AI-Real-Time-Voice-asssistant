@@ -256,8 +256,5 @@ def format_summary_for_user(summary_data, conversation, preferences, interests):
         best_interests = interests.order_by('-meta__interest_level')[:2]
         vehicles = [interest.vehicle_name for interest in best_interests]
         parts.append(f"Interested in: {', '.join(vehicles)}")
-
-    # Top recommendation (REMOVED: recommendation model & code)
-    # No recommendation info included anymore.
-
+        
     return " | ".join(parts) if parts else "No preferences captured yet"
