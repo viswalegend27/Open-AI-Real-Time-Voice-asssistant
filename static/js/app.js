@@ -396,9 +396,25 @@
   state.peerConnection = pc;
   
   aiAudioEl.autoplay = true;
+  aiAudioEl.playsInline = true; // For mobile/iOS inline playback
+  aiAudioEl.muted = true;
+
   pc.ontrack = (ev) => {
-  log('Received audio track from OpenAI');
-  try { aiAudioEl.srcObject = ev.streams[0]; } catch (e) { warn('Failed to set audio srcObject', e); }
+    log('Received audio track from OpenAI');
+    // Use only the first audio stream, always detach previous in cleanup on stop
+    if (!aiAudioEl.srcObject) {
+      try {
+        aiAudioEl.srcObject = ev.streams[0];
+        aiAudioEl.addEventListener('playing', function onPlaying() {
+          setTimeout(() => {
+            aiAudioEl.muted = false;
+          }, 300); // Longer buffer for smoother playback
+          aiAudioEl.removeEventListener('playing', onPlaying);
+        });
+      } catch (e) {
+        warn('Failed to set audio srcObject', e);
+      }
+    }
   };
   
   updateStatus('Requesting microphone access...', 'warning');
@@ -470,6 +486,9 @@
   if (state.audioStream) {
   try { state.audioStream.getTracks().forEach(track => track.stop()); } catch (e) {}
   state.audioStream = null;
+  }
+  if (aiAudioEl) {
+    try { aiAudioEl.srcObject = null; aiAudioEl.muted = true; } catch (e) {}
   }
   
   state.committedTranscript = (aiTranscriptEl?.textContent.replace(/\n+$/, '') || '');
