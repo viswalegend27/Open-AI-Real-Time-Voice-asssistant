@@ -97,6 +97,7 @@ def analyze_conversation(session_id):
         return {'status': 'error', 'message': str(e)}
 
 def save_message(session_id, role, content, user_id=None):
+    # Analyze and save a message to the conversation. Our analyze conversation function is called here.
     conv, _ = Conversation.objects.get_or_create(session_id=session_id, defaults={'user_id': user_id})
     conv.refresh_from_db()
     messages = list(conv.messages_json or [])
