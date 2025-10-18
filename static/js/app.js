@@ -269,7 +269,7 @@
   stopConversation(true);
   state.pendingSessionClosure = false;
   }
-  }, 12000);
+  }, 15000);
   
   state.summaryInProgress = false;
   state.summaryCallId = null;
