@@ -175,7 +175,7 @@
   async function saveMessageToDatabase(role, content) {
   if (!state.sessionId || !content) return;
     try {
-      // -- [TOOL CALL - /api/conversation] --
+      // -- [TOOL CALL - /api/conversation] (1)--
     await fetch('/api/conversation', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -194,7 +194,8 @@
   // -----------------------
   async function handleFunctionCall(functionName, args = {}, callId = null) {
   log('Function call:', functionName, args, 'callId:', callId);
-  // generate conversation summary function handler
+  // generate conversation summary function handler.
+  // Used to check function name is passed in to handler
   if (functionName === 'generate_conversation_summary') {
   const callSessionId = (args?.session_id && args.session_id !== 'current_conversation') ? args.session_id : state.sessionId;
   if (!callSessionId) {
@@ -216,7 +217,7 @@
   updateStatus('Generating summary...', 'warning');
   
   try {
-  // -- [TOOL CALL - /api/generate-summary] --
+  // -- [TOOL CALL - /api/generate-summary] (2)--
   const res = await fetch('/api/generate-summary', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -290,13 +291,6 @@
   updateAITranscript("Ishmael: I'd be happy to provide a summary once we've had a proper conversation! Please tell me about your vehicle requirements - budget, usage, preferences - and I'll give you personalized recommendations.");
   return { error: (error && error.message) || String(error) };
   }}
-  
-  // Placeholder handlers for other function calls
-  // Currently just acknowledge them, not sure this code is useful or not. Since no such functions are defined yet.
-  if (['analyze_user_needs', 'get_user_recommendations'].includes(functionName)) {
-    log(`${functionName} acknowledged`);
-  return { status: 'acknowledged' };
-  }
   
   log('Unknown function call:', functionName);
   return { status: 'unknown_function' };
