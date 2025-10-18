@@ -1,4 +1,3 @@
-"""Views for Mahindra Voice Assistant API endpoints"""
 from django.http import JsonResponse, FileResponse
 from django.views.decorators.csrf import csrf_exempt
 from pathlib import Path
