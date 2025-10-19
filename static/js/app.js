@@ -249,7 +249,6 @@
   } catch (e) {
   warn('Failed to send function response via dataChannel', e);
   }}
-  updateAITranscript(result.formatted_summary);
   await saveMessageToDatabase('assistant', result.formatted_summary);
   updateStatus('Connected! How can I help you?', 'success');
   
