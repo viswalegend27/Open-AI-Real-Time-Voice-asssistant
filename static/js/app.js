@@ -268,7 +268,7 @@
   stopConversation(true);
   state.pendingSessionClosure = false;
   }
-  }, 15000);
+  }, 4000);
   
   state.summaryInProgress = false;
   state.summaryCallId = null;
