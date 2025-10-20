@@ -95,8 +95,9 @@ def generate_summary(request):
     session_id = _get_session_id(request)
     if not session_id:
         return _json_error("session_id required", 400)
-    result = generate_conversation_summary(session_id)
-    return JsonResponse(result)
+    # Queue the summary generation task via Celery
+    task = generate_summary_task.delay(session_id)
+    return JsonResponse({'status': 'processing', 'task_id': task.id, 'message': 'Summary generation started.'})
 
 @csrf_exempt
 def get_summary(request, session_id):

@@ -61,9 +61,12 @@ def analyze_conversation(session_id):
         all_text = "\n".join(f"Customer: {m}" for m in user_messages)
 
         prompt = (
-            "You are an expert car sales assistant AI. Analyze the customer conversation and return a JSON always containing: "
+            "You are an expert car sales assistant AI. Analyze the customer conversation and extract any customer preferences that are directly stated or implied, even if not asked as a command. "
+            "Pay attention to any mentions, suggestions, requirements, questions, or implied needs about vehicles, features, budget, usage, or interests. "
+            "People may express preferences in many ways such as 'I prefer...', 'I need...', 'Can it...', 'It must be...', 'I'd like...', etc.—extract these whenever clearly about the customer's automotive needs. "
+            "Return a JSON always containing: "
             '{ "budget": "number + unit or null", "usage": "primary usage (family/adventure/city/commercial) or null", "priority_features": ["list of features"], "vehicle_interest": ["model names or null"], "other_insights": "any relevant note or null" } '
-            "Rules: identify only what the customer says, don't guess! Respond only with JSON."
+            "Rules: identify only what the customer says or clearly implies, don't guess! Respond only with JSON."
         )
         extracted = openai_chat(prompt, all_text, temp=0.2) or {}
         logger = logging.getLogger(__name__)
