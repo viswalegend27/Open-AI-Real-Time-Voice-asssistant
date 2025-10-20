@@ -5,6 +5,7 @@ import logging
 from dotenv import load_dotenv
 from django.utils import timezone
 from assistant.models import Conversation, UserPreference, VehicleInterest, ConversationSummary
+from celery import shared_task
 
 load_dotenv()
 
@@ -200,6 +201,10 @@ RULES:
         }
     except Exception as e:
         return {'status': 'error', 'message': str(e)}
+
+@shared_task
+def generate_summary_task(session_id):
+    return generate_conversation_summary(session_id)
 
 def format_summary_for_user(summary_data, conversation, preferences, interests):
     parts = []

@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import constants as C
 from assistant.analyzer import save_message, analyze_conversation, generate_conversation_summary
 from assistant.models import Conversation
+from assistant.analyzer import generate_summary_task
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -95,8 +96,8 @@ def generate_summary(request):
     if not session_id:
         return _json_error("session_id required", 400)
     result = generate_conversation_summary(session_id)
-    if result.get('status') == 'success' and result.get('formatted_summary'):
-        result['display_text'] = result['formatted_summary']
+    # if result.get('status') == 'success' and result.get('formatted_summary'):
+    #     result['display_text'] = result['formatted_summary']
     return JsonResponse(result)
 
 @csrf_exempt
