@@ -5,3 +5,5 @@ openai
 httpx
 redis
 psycopg2-binary
+celery 
+django-celery-results
