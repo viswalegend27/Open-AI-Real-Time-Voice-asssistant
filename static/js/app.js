@@ -209,6 +209,9 @@
   // Summart in progress check
   if (state.summaryInProgress && callId && state.summaryCallId === callId) {
   log('Summary already in progress for same call id, skipping...');
+  log('Summary already in progress for same call id, skipping...');
+  updateStatus('Summary is already being generated, please wait...', 'warning');
+  updateAITranscript("Ishmael: I'm working on your summary. Please wait a moment!");
   return { status: 'in_progress' };
   }
   
@@ -229,6 +232,17 @@
   }
   const result = await res.json();
   log('Summary result:', result);
+  if (
+    result.status === 'processing' ||
+    result.status === 'in_progress' ||
+    (result.message && result.message.toLowerCase().includes('processing'))
+  ) {
+    log('Summary generation is in progress—ignoring error UI.');
+    updateStatus('Summary generation is already in progress, please wait...', 'warning');
+    updateAITranscript("Ishmael: I'm already preparing your summary. Please wait!");
+    state.summaryInProgress = true; // Keep as true to block new requests
+    return { status: 'in_progress' };
+  }
   
   if (result.status === 'success' && result.formatted_summary) {
   // Function response via dataChannel.
