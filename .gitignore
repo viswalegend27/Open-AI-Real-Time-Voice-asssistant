@@ -6,4 +6,3 @@ __pycache__/
 *.pyd
 **/__pycache__/
 db.sqlite3
-system_instructions.md
