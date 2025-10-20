@@ -1,13 +1,13 @@
 @echo off
 REM ==========================================
 REM Ishmael Voice Assistant - Startup Script
-REM "Call me Ishmael..." - Django Version
+REM "Call me Ishmael..." - Django with Celery
 REM ==========================================
 
 echo.
 echo ========================================
 echo    Starting Ishmael Voice Assistant
-echo    "Call me Ishmael..." (Django)
+echo    "Call me Ishmael..." (Django + Celery)
 echo ========================================
 echo.
 
@@ -43,20 +43,15 @@ if not exist ".env" (
     exit /b 1
 )
 
-REM Start the Django server
+REM Start the Celery worker in a new command window
+start "Celery Worker" cmd /k "call venv\Scripts\activate.bat && celery -A voice_assistant worker -l info --pool=solo"
+
+REM Start the Django server in a new command window
+start "Django Server" cmd /k "call venv\Scripts\activate.bat && python manage.py runserver 127.0.0.1:8000"
+
 echo.
 echo ========================================
-echo    Launching Ishmael Django Server...
+echo Both servers started in new windows.
+echo (Close this window if you don't need logs.)
 echo ========================================
-echo.
-
-python manage.py runserver 127.0.0.1:8000
-
-REM Keep window open if there's an error
-if errorlevel 1 (
-    echo.
-    echo ========================================
-    echo    Server encountered an error
-    echo ========================================
-    pause
-)
+pause

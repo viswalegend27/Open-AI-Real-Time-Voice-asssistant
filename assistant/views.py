@@ -96,8 +96,6 @@ def generate_summary(request):
     if not session_id:
         return _json_error("session_id required", 400)
     result = generate_conversation_summary(session_id)
-    # if result.get('status') == 'success' and result.get('formatted_summary'):
-    #     result['display_text'] = result['formatted_summary']
     return JsonResponse(result)
 
 @csrf_exempt
