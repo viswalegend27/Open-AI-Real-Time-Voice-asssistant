@@ -211,12 +211,15 @@
   log('Summary already in progress for same call id, skipping...');
   updateStatus('Summary is already being generated, please wait...', 'warning');
   updateAITranscript("Ishmael: I'm working on your summary. Please wait a moment!");
+  stopConversation(true); // <<<=== force close session on summary request
   return { status: 'in_progress' };
   }
   
   state.summaryInProgress = true;
   state.summaryCallId = callId || null;
   updateStatus('Generating summary...', 'warning');
+  // Close the session immediately when summary is requested:
+  stopConversation(true); // <<<=== force close session on summary request
   
   try {
   // -- [TOOL CALL - /api/generate-summary] (2)--
