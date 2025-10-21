@@ -209,7 +209,6 @@
   // Summart in progress check
   if (state.summaryInProgress && callId && state.summaryCallId === callId) {
   log('Summary already in progress for same call id, skipping...');
-  log('Summary already in progress for same call id, skipping...');
   updateStatus('Summary is already being generated, please wait...', 'warning');
   updateAITranscript("Ishmael: I'm working on your summary. Please wait a moment!");
   return { status: 'in_progress' };
