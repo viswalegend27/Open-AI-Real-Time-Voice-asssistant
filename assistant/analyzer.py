@@ -144,9 +144,9 @@ def generate_conversation_summary(session_id: str) -> Dict[str, Any]:
     transcript = "\n".join(f"{'Customer' if m['role']=='user' else 'Ishmael'}: {m['content']}" for m in msgs)
     prompt = (
         f"You are analyzing a completed sales conversation. CONVERSATION: {transcript}\n\n"
-        "Return JSON with: summary(2-3 sentences), customer_name|null, contact_info|null, budget_range|null, "
+        "Return JSON with: summary(2 sentences), customer_name|null, contact_info|null, budget_range|null, "
         'vehicle_type|null, use_case|null, priority_features[], recommended_vehicles[], next_actions[], '
-        "sentiment, engagement_score(1-10), purchase_intent(high/medium/low). Use null when unknown."
+        "sentiment, engagement_score(1-10), purchase_intent(high/medium/low). Use null when unknown. Make it concise." 
     )
 
     summary_data = openai_chat(prompt, temp=0.3) or {}
@@ -175,18 +175,3 @@ def generate_conversation_summary(session_id: str) -> Dict[str, Any]:
     if not conv.ended_at:
         conv.ended_at = timezone.now()
         conv.save(update_fields=["ended_at"])
-
-    formatted = format_summary_for_user(summary_data, conv)
-    return {"status": "success", "summary": summary_data, "summary_id": summary_obj.id, "formatted_summary": formatted}
-
-
-def format_summary_for_user(summary_data: Dict[str, Any], conversation: Conversation) -> str:
-    parts = []
-    if br := summary_data.get("budget_range"):
-        parts.append(f"Budget: {br}")
-    if use := summary_data.get("use_case"):
-        parts.append(f"Use: {use}")
-    interests = [i.vehicle_name for i in conversation.vehicle_interests.all()][:2]
-    if interests:
-        parts.append("Interested in: " + ", ".join(interests))
-    return " | ".join(parts) if parts else "No preferences captured yet"

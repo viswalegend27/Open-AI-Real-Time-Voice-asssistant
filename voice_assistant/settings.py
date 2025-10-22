@@ -29,7 +29,7 @@ MIDDLEWARE = [
 ROOT_URLCONF = 'voice_assistant.urls'
 WSGI_APPLICATION = 'voice_assistant.wsgi.application'
 
-# Database
+# --- Database Definition to use Postgres ---
 
 DATABASES = {
     'default': {
