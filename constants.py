@@ -1,11 +1,8 @@
-"""OpenAI + Mahindra AI Agent global configuration (loads SYSTEM_INSTRUCTIONS from file)."""
-
 from __future__ import annotations
 from typing import Tuple, List, Dict, Any
 import os
 from pathlib import Path
 
-# Exports
 __all__ = [
     "DEFAULT_REALTIME_MODEL",
     "DEFAULT_VOICE",
@@ -24,7 +21,6 @@ __all__ = [
     "get_openai_headers",
 ]
 
-# --- Core constants (can be overridden via env) ---
 DEFAULT_REALTIME_MODEL = os.getenv("DEFAULT_REALTIME_MODEL", "gpt-4o-realtime-preview-2024-12-17")
 DEFAULT_VOICE = os.getenv("DEFAULT_VOICE", "echo")
 DEFAULT_TRANSCRIBE_MODEL = os.getenv("DEFAULT_TRANSCRIBE_MODEL", "whisper-1")
@@ -39,7 +35,7 @@ AI_AGENT_ROLE = "Mahindra Automotive Sales Consultant"
 
 # --- Load system instructions from external markdown file ---
 def _load_system_instructions(path: str | None = None) -> str:
-    """Load system instructions from a md file. Defaults to 'system_instructions.md' in same dir."""
+    # --- load my system_instructions.md ---
     base = Path(__file__).parent
     file_path = Path(path) if path else base / "system_instructions.md"
     try:
@@ -85,7 +81,6 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
 
 
 def get_realtime_session_url(base: str | None = None) -> str:
-    """Return the OpenAI Realtime sessions endpoint URL (overridable)."""
     base_url = base or OPENAI_BASE_URL
     return f"{base_url.rstrip('/')}/v1/realtime/sessions"
 
@@ -101,10 +96,6 @@ def get_session_payload(
     temperature: float | None = None,
     tools: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
-    """
-    Build the session payload. Caller can override any of the defaults.
-    NOTE: No temperature validation is performed — temperature value is passed through as provided.
-    """
     payload = {
         "model": model or DEFAULT_REALTIME_MODEL,
         "modalities": list(modalities or DEFAULT_MODALITIES),
@@ -117,13 +108,7 @@ def get_session_payload(
     }
     return payload
 
-
 def get_openai_headers(api_key: str | None = None, include_beta: bool = True) -> Dict[str, str]:
-    """
-    Return standard headers for OpenAI requests.
-    If api_key is None, uses OPENAI_API_KEY env var; raise if not found.
-    include_beta toggles inclusion of the realtime beta header value.
-    """
     key = api_key or os.getenv("OPENAI_API_KEY")
     if not key:
         raise RuntimeError("OpenAI API key not provided (pass api_key or set OPENAI_API_KEY).")
