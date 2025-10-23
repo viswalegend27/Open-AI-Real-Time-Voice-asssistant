@@ -7,9 +7,8 @@ import httpx
 import logging
 from dotenv import load_dotenv
 import constants as C
-from assistant.analyzer import save_message, analyze_conversation, generate_conversation_summary
+from assistant.analyzer import save_message, analyze_conversation, generate_conversation_summary, generate_summary_task
 from assistant.models import Conversation
-from assistant.analyzer import generate_summary_task
 
 load_dotenv()
 logger = logging.getLogger(__name__)

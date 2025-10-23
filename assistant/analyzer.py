@@ -16,8 +16,7 @@ except Exception:
 
 
 def openai_chat(prompt: str, user_content: Optional[str] = None,
-                model: str = "gpt-4o-mini", temp: float = 0.2) -> Optional[Any]:
-    """Simple wrapper returning parsed JSON when possible, else None."""
+    model: str = "gpt-4o-mini", temp: float = 0.2) -> Optional[Any]:
     if not OPENAI_CLIENT:
         return None
     try:
@@ -32,7 +31,6 @@ def openai_chat(prompt: str, user_content: Optional[str] = None,
     except Exception:
         return None
 
-
 _FALLBACK_MAHINDRA = {
     'XUV700': {'type': 'SUV', 'segment': 'premium', 'features': ['luxury', 'tech', 'safety', 'family', 'spacious']},
     'Scorpio-N': {'type': 'SUV', 'segment': 'premium', 'features': ['powerful', 'rugged', 'commanding', 'spacious']},
@@ -43,7 +41,6 @@ _FALLBACK_MAHINDRA = {
     'Bolero': {'type': 'SUV', 'segment': 'commercial', 'features': ['tough', 'reliable', 'rural', 'commercial']},
 }
 
-
 def get_mahindra_vehicles() -> Dict[str, Dict[str, Any]]:
     prompt = (
         "You are an expert on Mahindra vehicles. List major Mahindra passenger vehicles currently on sale in India "
@@ -53,11 +50,11 @@ def get_mahindra_vehicles() -> Dict[str, Dict[str, Any]]:
     fetched = openai_chat(prompt, temp=0.1)
     return fetched if isinstance(fetched, dict) and fetched else _FALLBACK_MAHINDRA
 
-
 def _user_texts(conv: Conversation) -> List[str]:
     return [m.get("content") for m in (conv.messages_json or []) if m.get("role") == "user" and m.get("content")]
 
 @shared_task
+# Here we register the generate_summary_task as a Celery task
 def generate_summary_task(session_id):
     return generate_conversation_summary(session_id)
 
@@ -119,7 +116,6 @@ def analyze_conversation(session_id: str) -> Dict[str, Any]:
 
     return {"status": "success", "extracted": extracted}
 
-
 def save_message(session_id: str, role: str, content: str, user_id: Optional[int] = None) -> Dict[str, Any]:
     conv, _ = Conversation.objects.get_or_create(session_id=session_id, defaults={"user_id": user_id})
     msgs = list(conv.messages_json or [])
@@ -129,7 +125,6 @@ def save_message(session_id: str, role: str, content: str, user_id: Optional[int
     conv.save(update_fields=["messages_json", "total_messages"])
     analysis = analyze_conversation(session_id)
     return {"status": "success", "message_count": conv.total_messages, "analysis": analysis}
-
 
 def generate_conversation_summary(session_id: str) -> Dict[str, Any]:
     try:

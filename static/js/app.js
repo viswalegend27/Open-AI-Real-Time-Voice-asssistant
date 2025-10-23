@@ -166,12 +166,13 @@
         updateStatus('Generating summary...', 'warning');
         stopConversation(true); // Immediately end session on summary request
         try {
+          // Trigger backend summary generation
           await fetch('/api/generate-summary', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ session_id: callSessionId })
           });
-        } catch (_) {}
+        } catch (_) {} // Ignore fetch errors here but need to be specific about errors in backend
         return { status: 'processing' };
       }
       log('Unknown function call:', functionName);
@@ -253,7 +254,7 @@
         state.sessionId = generateSessionId();
         log('Session ID:', state.sessionId);
         updateStatus('Connecting to Mahindra assistant...', 'info');
-        const sessionResp = await fetch('/api/session');
+        const sessionResp = await fetch('/api/session'); // session call to get ephemeral key
         if (!sessionResp.ok) throw new Error(`Failed to get session: ${sessionResp.status}`);
         const sessionData = await sessionResp.json();
         const EPHEMERAL_KEY = sessionData?.client_secret?.value;
