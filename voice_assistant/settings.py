@@ -17,8 +17,8 @@ CELERY_RESULT_SERIALIZER = 'json'
 
 INSTALLED_APPS = [
     'django.contrib.staticfiles',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
+    'django.contrib.auth', # Added for authentication middleware
+    'django.contrib.contenttypes', # Added for content type support
     'corsheaders',
     'assistant',
 ]
