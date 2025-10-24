@@ -103,7 +103,7 @@ def generate_summary(request):
 def get_summary(request, session_id):
     try:
         conv = Conversation.objects.get(session_id=session_id)
-        summary = getattr(conv, 'summary', None)
+        summary = conv.summary_data or {}
         if summary:
             return JsonResponse({
                 "status": "success",

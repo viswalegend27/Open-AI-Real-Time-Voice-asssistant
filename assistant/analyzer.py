@@ -3,7 +3,7 @@ from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
 from django.utils import timezone
 from django.db import transaction
-from assistant.models import Conversation, UserPreference, VehicleInterest, ConversationSummary
+from assistant.models import Conversation, UserPreference, VehicleInterest
 from celery import shared_task
 
 load_dotenv()
@@ -137,7 +137,6 @@ def generate_conversation_summary(session_id: str) -> Dict[str, Any]:
 
     summary_data = openai_chat(prompt, temp=0.3) or {}
     if not isinstance(summary_data, dict) or not summary_data:
-        # fallback
         interests = [i.vehicle_name for i in conv.vehicle_interests.all()]
         summary_data = {
             "summary": f"Conversation with {len(msgs)} messages; customer showed interest in vehicles.",
@@ -154,9 +153,8 @@ def generate_conversation_summary(session_id: str) -> Dict[str, Any]:
         if pref.data.get("type") == "usage" and not summary_data.get("use_case"):
             summary_data["use_case"] = pref.data.get("value")
 
-    summary_obj, _ = ConversationSummary.objects.update_or_create(
-        conversation=conv, defaults={"data": summary_data, "generated_at": timezone.now()}
-    )
+    conv.summary_data = summary_data
+    conv.summary_generated_at = timezone.now()
 
     if not conv.ended_at:
         conv.ended_at = timezone.now()

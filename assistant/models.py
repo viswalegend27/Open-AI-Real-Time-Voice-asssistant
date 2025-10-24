@@ -1,13 +1,16 @@
 from django.db import models
 from django.utils import timezone
 
-class Conversation(models.Model): # add them summary within conversation
+class Conversation(models.Model): 
     session_id = models.CharField(max_length=255, unique=True, db_index=True)
     user_id = models.CharField(max_length=255, null=True, blank=True, db_index=True)
     started_at = models.DateTimeField(default=timezone.now)
     ended_at = models.DateTimeField(null=True, blank=True)
     total_messages = models.IntegerField(default=0)
     messages_json = models.JSONField(default=list)
+    # Store summary info directly here.
+    summary_data = models.JSONField(default=dict, blank=True)
+    summary_generated_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-started_at']
@@ -37,15 +40,3 @@ class VehicleInterest(models.Model):
 
     def __str__(self):
         return self.vehicle_name
-
-class ConversationSummary(models.Model):
-    conversation = models.OneToOneField(Conversation, on_delete=models.CASCADE, related_name='summary')
-    data = models.JSONField(default=dict)
-    generated_at = models.DateTimeField(default=timezone.now)
-
-    class Meta:
-        ordering = ['-generated_at']
-        verbose_name_plural = "Conversation Summaries"
-
-    def __str__(self):
-        return f"Summary for {self.conversation.session_id[:8]}"
