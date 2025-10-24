@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from django.utils import timezone
 from django.db import transaction
 from assistant.models import Conversation, UserPreference, VehicleInterest
-from assistant.tools import mahindra_vehicles_schema
+from assistant.tools import conversation_summary_schema, conversation_analysis_schema
 from celery import shared_task
 
 load_dotenv()
@@ -118,25 +118,42 @@ def generate_conversation_summary(session_id: str) -> Dict[str, Any]:
     if not msgs:
         return {"status": "error", "message": "No messages"}
 
-    transcript = "\n".join(f"{'Customer' if m['role']=='user' else 'Ishmael'}: {m['content']}" for m in msgs)
-    prompt = (
-        f"You are analyzing a completed sales conversation. CONVERSATION: {transcript}\n\n"
-        "Return JSON with: summary(2 sentences), customer_name|null, contact_info|null, budget_range|null, "
-        'vehicle_type|null, use_case|null, priority_features[], recommended_vehicles[], next_actions[], '
-        "sentiment, engagement_score(1-10), purchase_intent(high/medium/low). Use null when unknown. Make it concise." 
+    transcript = "\n".join(
+        f"{'Customer' if m['role'] == 'user' else 'Ishmael'}: {m['content']}"
+        for m in msgs
     )
 
-    summary_data = openai_chat(prompt, temp=0.3) or {}
-    if not isinstance(summary_data, dict) or not summary_data:
-        interests = [i.vehicle_name for i in conv.vehicle_interests.all()]
-        summary_data = {
-            "summary": f"Conversation with {len(msgs)} messages; customer showed interest in vehicles.",
-            "customer_name": None, "contact_info": None, "budget_range": None,
-            "vehicle_type": "SUV" if interests else None, "use_case": None,
-            "priority_features": [], "recommended_vehicles": interests,
-            "next_actions": ["Follow up", "Offer test drive"], "sentiment": "neutral",
-            "engagement_score": 5, "purchase_intent": "medium"
-        }
+    if not OPENAI_CLIENT:
+        return {"status": "error", "message": "OpenAI client missing"}
+
+    try:
+        response = OPENAI_CLIENT.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert Mahindra sales assistant. Summarize this completed sales conversation and extract info as per the provided schema for business analysis."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": transcript,
+                },
+            ],
+            functions=[conversation_summary_schema],
+            function_call={"name": "summarize_sales_conversation"},
+            temperature=0.2,
+            response_format={"type": "json_object"},
+        )
+        func_result = response.choices[0].message.function_call
+        if func_result and func_result.arguments:
+            summary_data = json.loads(func_result.arguments)
+        else:
+            summary_data = {}
+    except Exception as e:
+        summary_data = {}
+        print(f"Failed OpenAI schema call: {e}")
 
     for pref in conv.preferences.all():
         if pref.data.get("type") == "budget" and not summary_data.get("budget_range"):
@@ -148,4 +165,6 @@ def generate_conversation_summary(session_id: str) -> Dict[str, Any]:
     conv.summary_generated_at = timezone.now()
     if not conv.ended_at:
         conv.ended_at = timezone.now()
-        conv.save(update_fields=["summary_data", "summary_generated_at", "ended_at"])
+    conv.save(update_fields=["summary_data", "summary_generated_at", "ended_at"])
+
+    return summary_data
