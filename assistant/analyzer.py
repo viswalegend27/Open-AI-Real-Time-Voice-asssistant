@@ -155,7 +155,6 @@ def generate_conversation_summary(session_id: str) -> Dict[str, Any]:
 
     conv.summary_data = summary_data
     conv.summary_generated_at = timezone.now()
-
     if not conv.ended_at:
         conv.ended_at = timezone.now()
-        conv.save(update_fields=["ended_at"])
+        conv.save(update_fields=["summary_data", "summary_generated_at", "ended_at"])
