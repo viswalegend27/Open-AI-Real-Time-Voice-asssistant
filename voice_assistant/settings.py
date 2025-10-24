@@ -17,13 +17,21 @@ CELERY_RESULT_SERIALIZER = 'json'
 
 INSTALLED_APPS = [
     'django.contrib.staticfiles',
+    'django.contrib.auth', # Added for authentication middleware
+    'django.contrib.contenttypes', # Added for content type support
     'corsheaders',
     'assistant',
 ]
 
 MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
 ROOT_URLCONF = 'voice_assistant.urls'
