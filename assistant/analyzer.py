@@ -31,17 +31,8 @@ def openai_chat(prompt: str, user_content: Optional[str] = None,
     except Exception:
         return None
 
-_FALLBACK_MAHINDRA = {
-    'XUV700': {'type': 'SUV', 'segment': 'premium', 'features': ['luxury', 'tech', 'safety', 'family', 'spacious']},
-    'Scorpio-N': {'type': 'SUV', 'segment': 'premium', 'features': ['powerful', 'rugged', 'commanding', 'spacious']},
-    'Thar': {'type': 'SUV', 'segment': 'lifestyle', 'features': ['offroad', 'adventure', 'iconic', 'rugged']},
-    'XUV400': {'type': 'EV', 'segment': 'compact', 'features': ['electric', 'eco-friendly', 'modern', 'city']},
-    'XUV300': {'type': 'SUV', 'segment': 'compact', 'features': ['city', 'stylish', 'compact', 'efficient']},
-    'Scorpio Classic': {'type': 'SUV', 'segment': 'workhorse', 'features': ['reliable', 'tough', 'value']},
-    'Bolero': {'type': 'SUV', 'segment': 'commercial', 'features': ['tough', 'reliable', 'rural', 'commercial']},
-}
-
 def get_mahindra_vehicles() -> Dict[str, Dict[str, Any]]:
+    # use function schema
     prompt = (
         "You are an expert on Mahindra vehicles. List major Mahindra passenger vehicles currently on sale in India "
         "and return a JSON mapping: { 'ModelName': { 'type': 'SUV/EV/etc', 'segment': 'premium/compact/etc', 'features': [...] } }."

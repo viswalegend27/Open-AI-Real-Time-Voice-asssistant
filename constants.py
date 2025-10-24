@@ -76,9 +76,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     }
 ]
 
-
 # --- Helper functions ---
-
 
 def get_realtime_session_url(base: str | None = None) -> str:
     base_url = base or OPENAI_BASE_URL

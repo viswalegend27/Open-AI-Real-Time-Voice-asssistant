@@ -1,7 +1,7 @@
 from django.db import models
 from django.utils import timezone
 
-class Conversation(models.Model):
+class Conversation(models.Model): # add them summary within conversation
     session_id = models.CharField(max_length=255, unique=True, db_index=True)
     user_id = models.CharField(max_length=255, null=True, blank=True, db_index=True)
     started_at = models.DateTimeField(default=timezone.now)
