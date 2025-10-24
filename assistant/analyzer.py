@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from django.utils import timezone
 from django.db import transaction
 from assistant.models import Conversation, UserPreference, VehicleInterest
+from assistant.tools import mahindra_vehicles_schema
 from celery import shared_task
 
 load_dotenv()
@@ -30,16 +31,6 @@ def openai_chat(prompt: str, user_content: Optional[str] = None,
         return json.loads(resp.choices[0].message.content)
     except Exception:
         return None
-
-def get_mahindra_vehicles() -> Dict[str, Dict[str, Any]]:
-    # use function schema
-    prompt = (
-        "You are an expert on Mahindra vehicles. List major Mahindra passenger vehicles currently on sale in India "
-        "and return a JSON mapping: { 'ModelName': { 'type': 'SUV/EV/etc', 'segment': 'premium/compact/etc', 'features': [...] } }."
-        "Return only real, current models."
-    )
-    fetched = openai_chat(prompt, temp=0.1)
-    return fetched if isinstance(fetched, dict) and fetched else _FALLBACK_MAHINDRA
 
 def _user_texts(conv: Conversation) -> List[str]:
     return [m.get("content") for m in (conv.messages_json or []) if m.get("role") == "user" and m.get("content")]
