@@ -17,13 +17,12 @@ try:
 except Exception:
     OPENAI_CLIENT = None
 
-
+# function wrapper to call the openAI
 def _call_openai(messages: List[Dict[str, str]],
                  functions: Optional[List[Dict[str, Any]]] = None,
                  function_name: Optional[str] = None,
                  model: str = "gpt-4o-mini",
                  temperature: float = 0.2) -> Optional[Dict[str, Any]]:
-    """Small wrapper to call OpenAI and return parsed json from function_call arguments."""
     if not OPENAI_CLIENT:
         return None
     try:
@@ -60,7 +59,6 @@ def generate_summary_task(session_id: str):
 
 
 def analyze_conversation(session_id: str) -> Dict[str, Any]:
-    """Extract preferences from conversation and persist them."""
     try:
         conv = Conversation.objects.get(session_id=session_id)
     except Conversation.DoesNotExist:
@@ -78,10 +76,8 @@ def analyze_conversation(session_id: str) -> Dict[str, Any]:
                     "Return only a valid JSON object as your output.")},
         {"role": "user", "content": all_text},
     ]
-
-    extracted = _call_openai(messages,
-                             functions=[conversation_analysis_schema],
-                             function_name="analyze_customer_preferences") or {}
+    # my tool call occurs here
+    extracted = _call_openai(messages,functions=[conversation_analysis_schema],function_name="analyze_customer_preferences") or {}
 
     # persist results concisely
     try:
@@ -139,7 +135,6 @@ def save_message(session_id: str, role: str, content: str, user_id: Optional[int
 
 
 def generate_conversation_summary(session_id: str) -> Dict[str, Any]:
-    """Generate summary and save to conversation.summary_data."""
     try:
         conv = Conversation.objects.get(session_id=session_id)
     except Conversation.DoesNotExist:
@@ -161,11 +156,8 @@ def generate_conversation_summary(session_id: str) -> Dict[str, Any]:
         {"role": "user", "content": transcript},
     ]
 
-    summary_data = _call_openai(messages,
-                                functions=[conversation_summary_schema],
-                                function_name="summarize_sales_conversation") or {}
-
-    # fallback to existing saved preferences if some fields missing
+    summary_data = _call_openai(messages,functions=[conversation_summary_schema],function_name="summarize_sales_conversation") or {}
+    
     for pref in conv.preferences.all():
         if pref.data.get("type") == "budget" and not summary_data.get("budget_range"):
             summary_data["budget_range"] = pref.data.get("value")
