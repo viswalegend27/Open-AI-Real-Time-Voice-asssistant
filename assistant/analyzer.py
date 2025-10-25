@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 from django.utils import timezone
 from django.db import transaction
 from celery import shared_task
-
 from assistant.models import Conversation, UserPreference, VehicleInterest
 from assistant.tools import conversation_summary_schema, conversation_analysis_schema
 
@@ -48,15 +47,12 @@ def _call_openai(messages: List[Dict[str, str]],
         return None
     return None
 
-
 def _user_texts(conv: Conversation) -> List[str]:
     return [m.get("content") for m in (conv.messages_json or []) if m.get("role") == "user" and m.get("content")]
-
 
 @shared_task
 def generate_summary_task(session_id: str):
     return generate_conversation_summary(session_id)
-
 
 def analyze_conversation(session_id: str) -> Dict[str, Any]:
     try:
@@ -132,7 +128,6 @@ def save_message(session_id: str, role: str, content: str, user_id: Optional[int
     conv.save(update_fields=["messages_json", "total_messages"])
     analysis = analyze_conversation(session_id)
     return {"status": "success", "message_count": conv.total_messages, "analysis": analysis}
-
 
 def generate_conversation_summary(session_id: str) -> Dict[str, Any]:
     try:
