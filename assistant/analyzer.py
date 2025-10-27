@@ -25,18 +25,20 @@ def _call_openai(messages: List[Dict[str, str]],
     if not OPENAI_CLIENT:
         return None
     try:
+        # our chat completion request
         resp = OPENAI_CLIENT.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
-            functions=functions or [],
-            function_call={"name": function_name} if function_name else None,
-            response_format={"type": "json_object"},
+            functions=functions or [], # oputunity to call our func schema 
+            function_call={"name": function_name} if function_name else None, # optional param to say which func to call
+            response_format={"type": "json_object"}, # in this application our default response formate is json object
         )
-        choice = resp.choices[0].message
+        choice = resp.choices[0].message # our response message
         # prefer function_call.arguments if present
         if getattr(choice, "function_call", None) and getattr(choice.function_call, "arguments", None):
-            return json.loads(choice.function_call.arguments)
+            return json.loads(choice.function_call.arguments) # if the function call specify to call func schema parse those arguments
+                                                              # as json and return
         # fallback: message content might be json
         if getattr(choice, "content", None):
             try:
@@ -50,6 +52,7 @@ def _call_openai(messages: List[Dict[str, str]],
 def _user_texts(conv: Conversation) -> List[str]:
     return [m.get("content") for m in (conv.messages_json or []) if m.get("role") == "user" and m.get("content")]
 
+# our lazy task to generate summary using celery
 @shared_task
 def generate_summary_task(session_id: str):
     return generate_conversation_summary(session_id)
@@ -72,7 +75,7 @@ def analyze_conversation(session_id: str) -> Dict[str, Any]:
                     "Return only a valid JSON object as your output.")},
         {"role": "user", "content": all_text},
     ]
-    # my tool call occurs here
+    # my tool call occurs here - specifaclly for analyzing customer preferences
     extracted = _call_openai(messages,functions=[conversation_analysis_schema],function_name="analyze_customer_preferences") or {}
 
     # persist results concisely
