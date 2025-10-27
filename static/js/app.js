@@ -325,6 +325,7 @@
         stopConversation();
       }
     }
+    // our conversation stop and cleanup
     function stopConversation(isAuto = false) {
       if (state.dataChannel) {
         try { state.dataChannel.close(); } catch (e) {}

@@ -44,9 +44,9 @@ A web-based, real-time AI voice assistant for Mahindra vehicle guidance, powered
 
 ## Architecture
 
-- **Backend:** Django, OpenAI (GPT/Whisper), custom analyzer and models.
+- **Backend:** Django, OpenAI (GPT/Whisper), custom analyzer and models, included tools function with definitive schemas.
 - **Frontend:** HTML, JavaScript, WebRTC voice streaming.
-- **Data:** SQLite (dev), ready for PostgreSQL.
+- **Data:** PostgreSQL. (deployment ready)
 
 ---
 
@@ -70,17 +70,15 @@ This enables you to easily adapt the AI's personality or usage (e.g., use it for
 - `assistant/urls.py`: API routing.
 - `constants.py`: Loads system instructions, config, and OpenAI settings.
 - `static/`: Frontend files (HTML, JS, CSS for the voice interface).
-- `system_instructions.md`: Edit this as described above for your scenario.
+- `system_instructions.md`: Edit this as described above for your scenario. Follows the rules of prompt engineering
 
 ---
 
 ## Key Endpoints
 
-- `POST /api/session` : Start a new chat session.
-- `POST /api/conversation` : Add a chat message.
-- `POST /api/analysis` : Extract intelligence from the session.
-- `GET /api/get-summary/<session_id>` : Get a conversation summary.
-- `GET /api/get-recommendations` : Get vehicle suggestions.
+- `POST /api/session` : Start a new chat session. Creates a new openAI session.
+- `POST /api/conversation` : Add a chat message. Our actual conversation
+- `POST /api/analysis` : Extract intelligence from the session. Analysis done using openAI
 
 ---
 
