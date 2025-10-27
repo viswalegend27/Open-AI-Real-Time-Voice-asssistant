@@ -7,3 +7,4 @@ redis
 psycopg2-binary
 celery 
 django-celery-results
+djangorestframework

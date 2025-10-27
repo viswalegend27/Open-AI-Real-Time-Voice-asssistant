@@ -7,8 +7,9 @@ import httpx
 import logging
 from dotenv import load_dotenv
 import constants as C
-from assistant.analyzer import save_message, analyze_conversation, generate_conversation_summary, generate_summary_task
+from assistant.analyzer import save_message, analyze_conversation, generate_summary_task
 from assistant.models import Conversation
+from assistant.serializers import VehicleInterestSerializer, ConversationSerializer, SummarySerializer, ConversationShortSerializer
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -103,29 +104,15 @@ def get_summary(request, session_id):
         conv = Conversation.objects.get(session_id=session_id)
         summary = conv.summary_data or {}
         if summary:
+            summary_data = summary.copy()
+            # Add generated_at from Conversation
+            summary_data["generated_at"] = conv.summary_generated_at
+            summary_serializer = SummarySerializer(summary_data)
+            conversation_serializer = ConversationShortSerializer(conv)
             return JsonResponse({
                 "status": "success",
-                "summary": {
-                    "text": summary.get("summary"),
-                    "customer_name": summary.data.get("customer_name"),
-                    "contact_info": summary.data.get("contact_info"),
-                    "budget_range": summary.data.get("budget_range"),
-                    "vehicle_type": summary.data.get("vehicle_type"),
-                    "use_case": summary.data.get("use_case"),
-                    "priority_features": summary.data.get("priority_features", []),
-                    "recommended_vehicles": summary.data.get("recommended_vehicles", []),
-                    "next_actions": summary.data.get("next_actions", []),
-                    "sentiment": summary.data.get("sentiment"),
-                    "engagement_score": summary.data.get("engagement_score"),
-                    "purchase_intent": summary.data.get("purchase_intent"),
-                    "generated_at": conv.summary_generated_at.isoformat() if conv.summary_generated_at else None
-                },
-                "conversation": {
-                    "session_id": conv.session_id,
-                    "started_at": conv.started_at.isoformat(),
-                    "ended_at": conv.ended_at.isoformat() if conv.ended_at else None,
-                    "total_messages": conv.total_messages
-                }
+                "summary": summary_serializer.data,
+                "conversation": conversation_serializer.data
             })
         return JsonResponse({
             "status": "not_found",
@@ -142,13 +129,5 @@ def get_summary(request, session_id):
 def list_vehicle_interests(request):
     from assistant.models import VehicleInterest
     interests = VehicleInterest.objects.select_related('conversation').all().order_by('-timestamp')
-    data = [{
-        "id": vi.id,
-        "vehicle_name": vi.vehicle_name,
-        "interest_level": vi.meta.get("interest_level"),
-        "mentioned_features": vi.meta.get("mentioned_features", []),
-        "timestamp": vi.timestamp.isoformat(),
-        "conversation_id": vi.conversation.session_id,
-        "user_id": vi.conversation.user_id,
-    } for vi in interests]
-    return JsonResponse({"vehicle_interests": data})
+    serializer = VehicleInterestSerializer(interests, many=True)
+    return JsonResponse({"vehicle_interests": serializer.data}, safe=False)
