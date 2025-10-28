@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from celery.schedules import crontab
 
 load_dotenv()
 
@@ -24,6 +25,14 @@ EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD")
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True") == "True"
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+# Celery Beat Schedule configuration
+CELERY_BEAT_SCHEDULE = {
+    'send_summaries_for_all_conversations': {
+        'task': 'assistant.tasks.scheduled_summaries_for_open_conversations',
+            'schedule': 3.0,  
+    }
+}
 
 INSTALLED_APPS = [
     'django.contrib.staticfiles',

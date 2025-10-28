@@ -26,15 +26,15 @@ if not exist ".env" (
     exit /b 1
 )
 
-REM Start Celery in the background, Django in the foreground
-start "" cmd /c "call venv\Scripts\activate.bat && celery -A voice_assistant worker -l info --pool=solo"
-echo [*] Celery started in a background window.
+REM Start Celery Worker in the background
+start "Celery Worker" cmd /k "call venv\Scripts\activate.bat && celery -A voice_assistant worker -l info --pool=solo"
 
+REM Start Celery Beat in the background
+start "Celery Beat" cmd /k "call venv\Scripts\activate.bat && celery -A voice_assistant beat --loglevel=info"
+
+REM Start Django server in the main window
 echo [*] Starting Django development server...
 python manage.py runserver 127.0.0.1:8000
-
-REM When Django server stops, kill celery (optional, advanced)
-REM taskkill /FI "WINDOWTITLE eq Celery Worker" /F
 
 echo [*] Shutdown complete.
 pause

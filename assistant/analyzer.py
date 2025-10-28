@@ -7,7 +7,6 @@ from django.db import transaction
 from celery import shared_task
 from assistant.models import Conversation, UserPreference, VehicleInterest
 from assistant.tools import conversation_summary_schema, conversation_analysis_schema
-from assistant.tasks import send_conversation_summary
 
 load_dotenv()
 
@@ -57,9 +56,8 @@ def _user_texts(conv: Conversation) -> List[str]:
 @shared_task
 def generate_summary_task(session_id: str):
     summary_data = generate_conversation_summary(session_id)
-    # Convert the summary_data (dict) to a string for the email body/file
     summary_text = json.dumps(summary_data, indent=2, ensure_ascii=False)
-    # Schedule sending the summary as an email after 3 seconds
+    from assistant.tasks import send_conversation_summary  # LOCAL IMPORT to avoid circular import
     send_conversation_summary.apply_async(args=[summary_text], countdown=3)
     return summary_data
 
