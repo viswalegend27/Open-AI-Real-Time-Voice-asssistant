@@ -6,3 +6,6 @@ __pycache__/
 *.pyd
 **/__pycache__/
 db.sqlite3
+/celerybeat-schedule-shm
+/celerybeat-schedule-wal
+/celerybeat-schedule

@@ -58,7 +58,7 @@ def generate_summary_task(session_id: str):
     summary_data = generate_conversation_summary(session_id)
     summary_text = json.dumps(summary_data, indent=2, ensure_ascii=False)
     from assistant.tasks import send_conversation_summary  # LOCAL IMPORT to avoid circular import
-    send_conversation_summary.apply_async(args=[summary_text], countdown=3)
+    send_conversation_summary.apply_async(args=[summary_text], countdown=5)
     return summary_data
 
 def analyze_conversation(session_id: str) -> Dict[str, Any]:
