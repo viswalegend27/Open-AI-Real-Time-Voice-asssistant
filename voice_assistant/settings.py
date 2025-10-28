@@ -30,7 +30,7 @@ DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 CELERY_BEAT_SCHEDULE = {
     'send_summaries_for_all_conversations': {
         'task': 'assistant.tasks.scheduled_summaries_for_open_conversations',
-            'schedule': 3.0,  
+            'schedule': 5.0,  
     }
 }
 
