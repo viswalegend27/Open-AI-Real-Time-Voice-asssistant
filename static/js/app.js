@@ -139,7 +139,8 @@
           log(`Saved ${role}`);
         });
       } catch (e) {
-        warn('Failed to save message:', e);
+        err('Failed to save message:', e);
+        updateStatus('Unable to save conversation message. Please check your connection.', 'error');
       }
     }
 
@@ -172,7 +173,11 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ session_id: callSessionId })
           });
-        } catch (_) {} // Ignore fetch errors here but need to be specific about errors in backend
+        } catch (error) {
+          err('Failed to generate summary:', error);
+          updateStatus('Sorry, there was an error generating your summary. Please try again or contact support.', 'error');
+          updateAITranscript("Ishmael: Sorry, I couldn't generate your summary due to an error.");
+        }
         return { status: 'processing' };
       }
       log('Unknown function call:', functionName);
@@ -274,11 +279,22 @@
                 setTimeout(() => { aiAudioEl.muted = false; }, 300);
                 aiAudioEl.removeEventListener('playing', onPlaying);
               });
-            } catch (e) { warn('Failed to set audio srcObject', e); }
+            } catch (error) {
+              err('Failed to set audio srcObject', error);
+              updateStatus('Could not play received audio stream.', 'error');
+            }
           }
         };
         updateStatus('Requesting microphone access...', 'warning');
-        state.audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        try {
+          state.audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (error) {
+          err('Microphone access denied:', error);
+          updateStatus('Microphone access denied. Please enable microphone permissions and try again.', 'error');
+          startBtn.disabled = false;
+          stopConversation();
+          return;
+        }
         const audioTrack = state.audioStream.getAudioTracks()[0];
         if (!audioTrack) throw new Error('No audio track from microphone');
         pc.addTrack(audioTrack);
@@ -292,7 +308,10 @@
           stopBtn.disabled = false;
         });
         dc.addEventListener('message', (evt) => {
-          try { handleDataChannelMessage(evt.data); } catch (e) { warn('dataChannel message handler error', e); }
+          try { handleDataChannelMessage(evt.data); } catch (e) {
+            err('dataChannel message handler error', e);
+            updateStatus('An error occurred while handling an AI message.', 'error');
+          }
         });
         dc.addEventListener('close', () => {
           log('Data channel closed - consultation ended');
@@ -306,15 +325,30 @@
         await pc.setLocalDescription(offer);
         const baseUrl = 'https://api.openai.com/v1/realtime';
         const model = 'gpt-4o-realtime-preview-2024-12-17';
-        const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
-          method: 'POST',
-          body: offer.sdp,
-          headers: {
-            'Authorization': `Bearer ${EPHEMERAL_KEY}`,
-            'Content-Type': 'application/sdp'
-          },
-        });
-        if (!sdpResponse.ok) throw new Error(`OpenAI SDP exchange failed: ${sdpResponse.status}`);
+        let sdpResponse;
+        try {
+          sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
+            method: 'POST',
+            body: offer.sdp,
+            headers: {
+              'Authorization': `Bearer ${EPHEMERAL_KEY}`,
+              'Content-Type': 'application/sdp'
+            },
+          });
+        } catch (error) {
+          err('Failed to contact OpenAI realtime API:', error);
+          updateStatus('Error contacting the AI service. Check your internet connection.', 'error');
+          startBtn.disabled = false;
+          stopConversation();
+          return;
+        }
+        if (!sdpResponse.ok) {
+          err('OpenAI SDP exchange failed:', sdpResponse.status);
+          updateStatus('Error connecting to the AI service: ' + sdpResponse.status, 'error');
+          startBtn.disabled = false;
+          stopConversation();
+          return;
+        }
         const answerSdp = await sdpResponse.text();
         await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
         log('WebRTC connection established - Mahindra sales consultant ready');
@@ -347,7 +381,11 @@
       state.isStreaming = false;
       state.currentAIResponse = '';
       if (state.networkAbortController) {
-        try { state.networkAbortController.abort(); } catch (e) {}
+        try { state.networkAbortController.abort(); } 
+        catch (error) {
+          err('Error during cleanup:', error);
+          updateStatus('Error cleaning up resources. Please refresh the page.', 'error');
+        }
         state.networkAbortController = null;
       }
       startBtn.disabled = false;
