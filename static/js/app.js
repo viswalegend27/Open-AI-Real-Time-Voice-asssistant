@@ -26,7 +26,6 @@
       summaryInProgress: false,
       summaryCallId: null,
       pendingRaf: null,
-      networkAbortController: null
     };
 
     // -------------- Utility Helpers --------------
@@ -52,6 +51,22 @@
       statusEl.classList.toggle('status-success', type === 'success');
       statusEl.classList.toggle('status-warning', type === 'warning');
     }
+    // -------------- Transcript Reset Utility --------------
+    function resetTranscriptFields() {
+      if (userTranscriptEl) {
+        userTranscriptEl.textContent = '';
+        userTranscriptEl.classList.add('empty');
+      }
+      if (aiTranscriptEl) {
+        aiTranscriptEl.textContent = '';
+        aiTranscriptEl.classList.add('empty');
+      }
+      state.committedTranscript = '';
+      state.streamingLine = '';
+      state.isStreaming = false;
+      state.currentAIResponse = '';
+    }
+    resetTranscriptFields();
 
     function appendToElement(el, text) {
       if (!el) return;
@@ -254,6 +269,7 @@
 
     // -------------- Conversation Start/Stop (WebRTC + OpenAI) --------------
     async function startConversation() {
+      resetTranscriptFields();
       if (state.peerConnection || state.dataChannel) {
         warn('Already connected — ignoring startConversation call');
         return;
@@ -380,10 +396,7 @@
       if (aiAudioEl) {
         try { aiAudioEl.srcObject = null; aiAudioEl.muted = true; } catch (e) {}
       }
-      state.committedTranscript = (aiTranscriptEl?.textContent.replace(/\n+$/, '') || '');
-      state.streamingLine = '';
-      state.isStreaming = false;
-      state.currentAIResponse = '';
+      resetTranscriptFields();
       if (state.networkAbortController) {
         try { state.networkAbortController.abort(); } 
         catch (error) {
@@ -406,17 +419,6 @@
     if (startBtn) startBtn.addEventListener('click', () => startConversation());
     if (stopBtn) stopBtn.addEventListener('click', () => stopConversation(false));
     window.addEventListener('beforeunload', () => stopConversation());
-    // Blank transcript fields on first render
-    function initTranscript(el) {
-      if (!el) return;
-      const text = (el.textContent || '').trim().toLowerCase();
-      if (!text || /click.*start|start conversation|ishmael|you:|tell me what you|click "start conversation"/.test(text)) {
-        el.textContent = '';
-        el.classList.add('empty');
-      }
-    }
-    initTranscript(userTranscriptEl);
-    initTranscript(aiTranscriptEl);
     if (stopBtn) stopBtn.disabled = true;
     updateStatus(`${AI_NAME} ready`, 'info');
     log(`${AI_NAME} - Mahindra Sales Assistant initialized and ready`);
