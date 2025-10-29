@@ -7,6 +7,10 @@
     const userTranscriptEl = document.getElementById('userTranscript');
     const aiTranscriptEl = document.getElementById('aiTranscript');
     const aiAudioEl = document.getElementById('aiAudio');
+    // --- Constants & Config ---
+    const AI_NAME = 'Ishmael';
+    const AI_PREFIX = `${AI_NAME}: `;
+    const OPENAI_MODEL = 'gpt-4o-realtime-preview-2024-12-17';
 
     // -------------- App State --------------
     const state = {
@@ -17,7 +21,7 @@
       isStreaming: false,
       committedTranscript: '',
       streamingLine: '',
-      streamingPrefix: 'Ishmael: ',
+      streamingPrefix: AI_PREFIX,
       currentAIResponse: '',
       summaryInProgress: false,
       summaryCallId: null,
@@ -26,9 +30,9 @@
     };
 
     // -------------- Utility Helpers --------------
-    const log = (...args) => console.log('Ishmael:', ...args);
-    const warn = (...args) => console.warn('Ishmael:', ...args);
-    const err = (...args) => console.error('Ishmael:', ...args);
+    const log = (...args) => console.log(`${AI_NAME}:`, ...args);
+    const warn = (...args) => console.warn(`${AI_NAME}:`, ...args);
+    const err = (...args) => console.error(`${AI_NAME}:`, ...args);
 
     function generateSessionId() {
       return `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -151,14 +155,14 @@
       if (functionName === 'generate_conversation_summary') {
         const callSessionId = (args?.session_id && args.session_id !== 'current_conversation') ? args.session_id : state.sessionId;
         if (!callSessionId) {
-          updateAITranscript("Ishmael: We need to have a conversation first before I can generate a summary. Please tell me about your vehicle requirements!");
+          updateAITranscript(`${AI_PREFIX}We need to have a conversation first before I can generate a summary. Please tell me about your vehicle requirements!`);
           updateStatus('Ready', 'info');
           return { status: 'no_session' };
         }
         if (state.summaryInProgress && callId && state.summaryCallId === callId) {
           log('Summary already in progress for same call id, skipping...');
           updateStatus('Summary is already being generated, please wait...', 'warning');
-          updateAITranscript("Ishmael: I'm working on your summary. Please wait a moment!");
+          updateAITranscript(`${AI_PREFIX}I'm working on your summary. Please wait a moment!`);
           stopConversation(true);
           return { status: 'in_progress' };
         }
@@ -176,7 +180,7 @@
         } catch (error) {
           err('Failed to generate summary:', error);
           updateStatus('Sorry, there was an error generating your summary. Please try again or contact support.', 'error');
-          updateAITranscript("Ishmael: Sorry, I couldn't generate your summary due to an error.");
+          updateAITranscript(`${AI_PREFIX}Sorry, I couldn't generate your summary due to an error.`);
         }
         return { status: 'processing' };
       }
@@ -299,7 +303,7 @@
         if (!audioTrack) throw new Error('No audio track from microphone');
         pc.addTrack(audioTrack);
         log('Added local audio track');
-        updateStatus('Connecting to Ishmael...', 'info');
+        updateStatus(`Connecting to ${AI_NAME}...`, 'info');
         const dc = pc.createDataChannel('oai-events');
         state.dataChannel = dc;
         dc.addEventListener('open', () => {
@@ -324,7 +328,7 @@
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         const baseUrl = 'https://api.openai.com/v1/realtime';
-        const model = 'gpt-4o-realtime-preview-2024-12-17';
+        const model = OPENAI_MODEL;
         let sdpResponse;
         try {
           sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
@@ -414,8 +418,8 @@
     initTranscript(userTranscriptEl);
     initTranscript(aiTranscriptEl);
     if (stopBtn) stopBtn.disabled = true;
-    updateStatus('Ishmael ready', 'info');
-    log('Ishmael - Mahindra Sales Assistant initialized and ready');
+    updateStatus(`${AI_NAME} ready`, 'info');
+    log(`${AI_NAME} - Mahindra Sales Assistant initialized and ready`);
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initModule, { once: true });
