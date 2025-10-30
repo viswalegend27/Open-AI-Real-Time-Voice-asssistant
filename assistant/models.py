@@ -11,7 +11,8 @@ class Conversation(models.Model):
     # Store summary info directly here.
     summary_data = models.JSONField(default=dict, blank=True)
     summary_generated_at = models.DateTimeField(null=True, blank=True)
-
+    summary_emailed = models.BooleanField(default=False)
+    
     class Meta:
         ordering = ['-started_at']
 
