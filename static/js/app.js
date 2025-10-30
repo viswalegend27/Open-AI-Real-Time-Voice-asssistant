@@ -162,6 +162,17 @@
         updateStatus('Unable to save conversation message. Please check your connection.', 'error');
       }
     }
+    // -------------- My Toast functionality --------------    
+    function showToast(message, timeout = 3500) {
+        const toast = document.getElementById('toast-message');
+        if (!toast) return;
+        toast.textContent = message;
+        toast.classList.add('show');
+        clearTimeout(window._toastTimeout);
+        window._toastTimeout = setTimeout(() => {
+          toast.classList.remove('show');
+        }, timeout);
+    }
 
     // -------------- Function Call Handler --------------
     async function handleFunctionCall(functionName, args = {}, callId = null) {
@@ -185,6 +196,7 @@
         state.summaryCallId = callId || null;
         updateStatus('Generating summary...', 'warning');
         stopConversation(true); // Immediately end session on summary request
+        showToast("Conversation has ended");
         try {
           // Trigger backend summary generation
           await fetch('/api/generate-summary', {
