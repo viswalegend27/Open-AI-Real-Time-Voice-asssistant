@@ -5,6 +5,7 @@ from celery import shared_task
 from django.core.mail import EmailMessage
 from django.conf import settings
 from assistant.models import Conversation
+from django.db.models import Q
 
 logger = logging.getLogger(__name__)
 
@@ -33,15 +34,15 @@ def send_conversation_summary(summary_text):
 
 @shared_task
 def scheduled_summaries_for_open_conversations():
-    from assistant.analyzer import generate_conversation_summary  # LOCAL IMPORT AVOIDS CIRCULAR IMPORT
-    conversations = Conversation.objects.filter(summary_data__isnull=True)
-    logger.info(f"[CELERY BEAT] Found {conversations.count()} conversations to process.")
-    print(f"[CELERY BEAT] Found {conversations.count()} conversations to process.")
+    conv = Conversation.objects.exclude(
+        Q(summary_data__isnull=True) | Q(summary_data={})
+    ).order_by('-started_at').first()
+    if not conv:
+        logger.info("[CELERY BEAT] No conversations with completed summary to mail.")
+        print("[CELERY BEAT] No conversations with completed summary to mail.")
+        return
 
-    for conv in conversations:
-        logger.info(f"[CELERY BEAT] Processing conversation {conv.session_id}")
-        print(f"[CELERY BEAT] Processing conversation {conv.session_id}")
-        summary_data = generate_conversation_summary(conv.session_id)
-        if summary_data and summary_data != {"status": "error", "message": "No messages"}:
-            summary_text = json.dumps(summary_data, indent=2, ensure_ascii=False)
-            send_conversation_summary.apply_async(args=[summary_text], countdown=3)
+    logger.info(f"[CELERY BEAT] Mailing summary for conversation {conv.session_id}")
+    print(f"[CELERY BEAT] Mailing summary for conversation {conv.session_id}")
+    summary_text = json.dumps(conv.summary_data, indent=2, ensure_ascii=False)
+    send_conversation_summary.apply_async(args=[summary_text], countdown=3)

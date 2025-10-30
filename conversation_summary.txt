@@ -1,0 +1,24 @@
+{
+  "summary": "The customer inquired about the Mahindra Bolero, and Ishmael provided details about its features and suitability for rural and commercial use.",
+  "use_case": "commercial",
+  "sentiment": "positive",
+  "budget_range": null,
+  "contact_info": null,
+  "next_actions": [
+    "Provide more detailed specifications",
+    "Discuss financing options"
+  ],
+  "vehicle_type": "SUV",
+  "customer_name": null,
+  "purchase_intent": "medium",
+  "engagement_score": 7,
+  "priority_features": [
+    "robust build quality",
+    "reliable performance",
+    "spacious interior",
+    "excellent fuel efficiency"
+  ],
+  "recommended_vehicles": [
+    "Mahindra Bolero"
+  ]
+}
