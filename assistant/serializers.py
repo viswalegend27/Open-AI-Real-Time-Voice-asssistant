@@ -12,7 +12,8 @@ class ConversationSerializer(serializers.ModelSerializer):
             'total_messages',
             'messages_json',
             'summary_data',
-            'summary_generated_at'
+            'summary_generated_at',
+            'summary_emailed_at'
         ]
 
 class SummarySerializer(serializers.Serializer):
