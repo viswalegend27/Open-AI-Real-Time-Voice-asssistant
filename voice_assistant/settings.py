@@ -29,7 +29,7 @@ DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 # Celery Beat Schedule configuration
 CELERY_BEAT_SCHEDULE = {
     'send_summaries_for_all_conversations': {
-        'task': 'assistant.tasks.scheduled_summaries_for_open_conversations',
+        'task': 'assistant.tasks.schedule_email',
             'schedule': 20.0,  
     }
 }

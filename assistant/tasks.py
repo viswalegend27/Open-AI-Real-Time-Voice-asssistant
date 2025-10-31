@@ -11,7 +11,7 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 @shared_task
-def send_conversation_summary(session_id):
+def email_conversation_summary(session_id):
     logger.info("[CELERY TASK] send_conversation_summary called for session_id=%s", session_id)
     recipient = os.environ.get('MAIN_EMAIL')
     # Fetch conversation!
@@ -34,7 +34,7 @@ def send_conversation_summary(session_id):
         logger.error("Conversation %s not found.", session_id)
 
 @shared_task
-def scheduled_summaries_for_open_conversations():
+def schedule_email():
     conv = Conversation.objects.exclude(
         Q(summary_data__isnull=True) | Q(summary_data={}) | Q(summary_emailed_at__isnull=False)
     ).order_by('-started_at').first()
@@ -44,4 +44,4 @@ def scheduled_summaries_for_open_conversations():
 
     logger.info(f"[CELERY BEAT] Mailing summary for conversation {conv.session_id}")
     # Only pass session_id!
-    send_conversation_summary.apply_async(args=[conv.session_id], countdown=5)
+    email_conversation_summary.apply_async(args=[conv.session_id], countdown=5)
