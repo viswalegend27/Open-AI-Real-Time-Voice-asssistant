@@ -144,10 +144,20 @@
       state.currentAIResponse = '';
       state.isStreaming = false;
     }
-
+    const MESSAGE_COOLDOWN = 5000; // 2 seconds
+    const lastMessageTimestamps = {};
     // -------------- DB Save (User + Assistant) --------------
     async function saveMessageToDatabase(role, content) {
       if (!state.sessionId || !content) return;
+      const now = Date.now();
+      const key = state.sessionId + '-' + role;
+      if (lastMessageTimestamps[key] && now - lastMessageTimestamps[key] < MESSAGE_COOLDOWN) {
+        // Too soon! Prevent another call, optionally show a warning or just silently drop.
+        warn('Too soon since last message, skipping save.');
+        updateStatus('Please wait a moment before sending another message.', 'warning');
+        return;
+      }
+      lastMessageTimestamps[key] = now;
       try {
         await fetch('/api/conversation', {
           method: 'POST',

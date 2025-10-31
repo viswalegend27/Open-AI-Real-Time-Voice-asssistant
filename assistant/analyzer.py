@@ -1,6 +1,8 @@
 import os
 import json
+import logging
 from typing import Optional, Dict, Any, List
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from django.utils import timezone
 from django.db import transaction
@@ -8,6 +10,9 @@ from celery import shared_task
 from assistant.models import Conversation, UserPreference, VehicleInterest
 from assistant.tools import conversation_summary_schema, conversation_analysis_schema
 
+logger = logging.getLogger(__name__)
+MESSAGE_COOLDOWN_SECONDS = 5  
+ANALYSIS_MESSAGE_BATCH_SIZE = 3  
 load_dotenv()
 
 try:
@@ -16,47 +21,45 @@ try:
 except Exception:
     OPENAI_CLIENT = None
 
-# function wrapper to call the openAI
-def _call_openai(messages: List[Dict[str, str]],
-                 functions: Optional[List[Dict[str, Any]]] = None,
-                 function_name: Optional[str] = None,
-                 model: str = "gpt-4o-mini",
-                 temperature: float = 0.2) -> Optional[Dict[str, Any]]:
+def _call_openai(
+    messages: List[Dict[str, str]],
+    functions: Optional[List[Dict[str, Any]]] = None,
+    function_name: Optional[str] = None,
+    model: str = "gpt-4o-mini",
+    temperature: float = 0.2
+) -> Optional[Dict[str, Any]]:
     if not OPENAI_CLIENT:
+        logger.warning("OPENAI_CLIENT not available")
         return None
     try:
-        # our chat completion request
         resp = OPENAI_CLIENT.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
-            functions=functions or [], # oputunity to call our func schema 
-            function_call={"name": function_name} if function_name else None, # optional param to say which func to call
-            response_format={"type": "json_object"}, # in this application our default response formate is json object
+            functions=functions or [],
+            function_call={"name": function_name} if function_name else None,
+            response_format={"type": "json_object"},
         )
-        choice = resp.choices[0].message # our response message
-        # prefer function_call.arguments if present
+        choice = resp.choices[0].message
         if getattr(choice, "function_call", None) and getattr(choice.function_call, "arguments", None):
-            return json.loads(choice.function_call.arguments) # if the function call specify to call func schema parse those arguments
-                                                              # as json and return
-        # fallback: message content might be json
+            return json.loads(choice.function_call.arguments)
         if getattr(choice, "content", None):
             try:
                 return json.loads(choice.content)
             except Exception:
                 return None
-    except Exception:
-        return None
+    except Exception as e:
+        logger.error(f"OpenAI API call failed: {e}")
     return None
 
 def _user_texts(conv: Conversation) -> List[str]:
+    """Extract user-role message content from Conversation."""
     return [m.get("content") for m in (conv.messages_json or []) if m.get("role") == "user" and m.get("content")]
 
-# our lazy task to generate summary using celery
 @shared_task
 def generate_summary_task(session_id: str):
     summary_data = generate_conversation_summary(session_id)
-    summary_text = json.dumps(summary_data, indent=2, ensure_ascii=False)
+    # summary_text is unused; can be re-added for logging if needed
     return summary_data
 
 def analyze_conversation(session_id: str) -> Dict[str, Any]:
@@ -70,20 +73,18 @@ def analyze_conversation(session_id: str) -> Dict[str, Any]:
         return {"status": "no_action", "message": "no user messages"}
 
     all_text = "\n".join(f"Customer: {t}" for t in texts)
-
     messages = [
         {"role": "system",
-        "content": ("You are a Mahindra car sales assistant AI. Extract user needs according to the schema. "
-                    "Return only a valid JSON object as your output.")},
+         "content": ("You are a Mahindra car sales assistant AI. Extract user needs according to the schema. "
+                     "Return only a valid JSON object as your output.")},
         {"role": "user", "content": all_text},
     ]
-    # my tool call occurs here - specifaclly for analyzing customer preferences
-    extracted = _call_openai(messages,functions=[conversation_analysis_schema],function_name="analyze_customer_preferences") or {}
+    extracted = _call_openai(messages, functions=[conversation_analysis_schema], function_name="analyze_customer_preferences") or {}
 
-    # persist results concisely
     try:
         with transaction.atomic():
-            # save simple preferences
+            now = timezone.now()
+            # Save simple preferences
             for key in ("budget", "usage"):
                 val = extracted.get(key)
                 if val:
@@ -91,47 +92,76 @@ def analyze_conversation(session_id: str) -> Dict[str, Any]:
                         conversation=conv,
                         data__type=key,
                         defaults={"data": {"type": key, "value": str(val), "confidence": 0.8},
-                                  "extracted_at": timezone.now()}
+                                  "extracted_at": now}
                     )
-
-            # priority features
+            # Priority features
             pf = extracted.get("priority_features")
             if pf:
                 UserPreference.objects.update_or_create(
                     conversation=conv,
                     data__type="priority_features",
                     defaults={"data": {"type": "priority_features", "value": json.dumps(pf), "confidence": 0.7},
-                              "extracted_at": timezone.now()}
+                              "extracted_at": now}
                 )
-
-            # vehicle interests: bulk create new, update existing
+            # Vehicle interests
             vehicles = [v for v in (extracted.get("vehicle_interest") or []) if v]
             if vehicles:
-                existing = set(VehicleInterest.objects.filter(conversation=conv, vehicle_name__in=vehicles)
-                               .values_list("vehicle_name", flat=True))
-                now = timezone.now()
-                to_create = [VehicleInterest(conversation=conv, vehicle_name=v,
-                                             meta={"interest_level": 8}, timestamp=now)
-                             for v in vehicles if v not in existing]
+                existing = set(
+                    VehicleInterest.objects.filter(conversation=conv, vehicle_name__in=vehicles)
+                    .values_list("vehicle_name", flat=True)
+                )
+                to_create = [
+                    VehicleInterest(conversation=conv, vehicle_name=v, meta={"interest_level": 8}, timestamp=now)
+                    for v in vehicles if v not in existing
+                ]
                 if to_create:
                     VehicleInterest.objects.bulk_create(to_create)
                 VehicleInterest.objects.filter(conversation=conv, vehicle_name__in=vehicles).update(
                     meta={"interest_level": 8}, timestamp=now
                 )
     except Exception as e:
+        logger.error(f"Error persisting analysis: {e}")
         return {"status": "error", "message": str(e)}
 
     return {"status": "success", "extracted": extracted}
 
-
 def save_message(session_id: str, role: str, content: str, user_id: Optional[int] = None) -> Dict[str, Any]:
     conv, _ = Conversation.objects.get_or_create(session_id=session_id, defaults={"user_id": user_id})
     msgs = list(conv.messages_json or [])
-    msgs.append({"role": role, "content": content, "timestamp": timezone.now().isoformat()})
+    now = timezone.now()
+
+    # Rate limit: Only allow one message per session every MESSAGE_COOLDOWN_SECONDS
+    if msgs:
+        last_msg = msgs[-1]
+        last_time = last_msg.get("timestamp")
+        if last_time:
+            try:
+                last_time_dt = datetime.fromisoformat(last_time)
+                if timezone.is_naive(last_time_dt):
+                    last_time_dt = timezone.make_aware(last_time_dt, timezone.get_current_timezone())
+                aware_now = now if not timezone.is_naive(now) else timezone.make_aware(now, timezone.get_current_timezone())
+            except Exception:
+                last_time_dt = now
+                aware_now = now
+            if (aware_now - last_time_dt).total_seconds() < MESSAGE_COOLDOWN_SECONDS:
+                return {
+                    "status": "too_soon",
+                    "message": f"Please wait {MESSAGE_COOLDOWN_SECONDS} seconds between messages.",
+                    "next_allowed_time": (last_time_dt + timedelta(seconds=MESSAGE_COOLDOWN_SECONDS)).isoformat()
+                }
+
+    msgs.append({"role": role, "content": content, "timestamp": now.isoformat()})
     conv.messages_json = msgs
     conv.total_messages = len(msgs)
     conv.save(update_fields=["messages_json", "total_messages"])
-    analysis = analyze_conversation(session_id)
+
+    # Only analyze at every Nth message
+    if conv.total_messages % ANALYSIS_MESSAGE_BATCH_SIZE == 0:
+        logger.info(f"Analysis triggered for session {session_id}: {conv.total_messages} messages so far.")
+        analysis = analyze_conversation(session_id)
+    else:
+        analysis = {"status": "skipped", "message": f"Analysis runs after every {ANALYSIS_MESSAGE_BATCH_SIZE} messages."}
+
     return {"status": "success", "message_count": conv.total_messages, "analysis": analysis}
 
 def generate_conversation_summary(session_id: str) -> Dict[str, Any]:
@@ -151,13 +181,15 @@ def generate_conversation_summary(session_id: str) -> Dict[str, Any]:
 
     messages = [
         {"role": "system",
-        "content": ("You are an expert Mahindra sales assistant. Summarize the conversation per schema. "
-                    "Return your answer as a JSON object.")},
+         "content": ("You are an expert Mahindra sales assistant. Summarize the conversation per schema. "
+                     "Return your answer as a JSON object.")},
         {"role": "user", "content": transcript},
     ]
 
-    summary_data = _call_openai(messages,functions=[conversation_summary_schema],function_name="summarize_sales_conversation") or {}
-    
+    summary_data = _call_openai(
+        messages, functions=[conversation_summary_schema], function_name="summarize_sales_conversation"
+    ) or {}
+
     for pref in conv.preferences.all():
         if pref.data.get("type") == "budget" and not summary_data.get("budget_range"):
             summary_data["budget_range"] = pref.data.get("value")
