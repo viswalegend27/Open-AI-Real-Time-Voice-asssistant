@@ -6,23 +6,20 @@ A web-based, real-time AI voice assistant for Mahindra vehicle guidance, powered
 
 ## Features
 
-- **Voice Chat:** Speak directly to "Ishmael," a smart Mahindra sales consultant, via your browser.
-- **Live Recommendations:** Get custom vehicle recommendations based on your needs, budget, and preferences.
-- **Automatic Analytics:** Extracts your interests, preferences, and conversation summary as you chat.
-- **Simple API:** RESTful endpoints for messages, session handling, analytics, and summaries.
-- **Full-stack Solution:** Django backend, HTML + WebRTC frontend; easy to run on your machine.
+- **Voice Chat:** Speak directly to “Ishmael,” your smart Mahindra sales consultant, through the browser.
+- **Live Recommendations:** Get personalized vehicle recommendations based on your needs, budget, and preferences.
+- **On-the-Fly Analytics:** The assistant analyzes your conversation and extracts valuable interests and preferences while you chat.
+- **Simple REST API:** Endpoints for chat interaction, session management, analytics, summaries, and more.
+- **Complete Solution:** Django-powered backend; HTML, JS, and WebRTC frontend for cross-platform access.
+- **Background Jobs:** Email notifications and summaries via automated background tasks.
+- **Easily Customizable Persona:** Adapt the assistant's knowledge and character using a markdown config file.
 
 ---
 
 ## Quick Start
 
-1. **Set Environment Variables:**  
-   Create `.env` in the project root:
-   ```
-   OPENAI_API_KEY=sk-...
-   SECRET_KEY=...
-   DEBUG=True
-   ```
+1. **Setup Environment Variables:**  
+   Copy `.env_example.txt` to `.env` and fill in your OpenAI, database, and email details.
 2. **Install Dependencies:**  
    ```
    pip install -r requirements.txt
@@ -38,61 +35,68 @@ A web-based, real-time AI voice assistant for Mahindra vehicle guidance, powered
    # OR
    python manage.py runserver
    ```
-5. Access `[http://127.0.0.1:8000](http://127.0.0.1:8000)` in your browser.
+5. Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser.
 
 ---
 
-## Architecture
+## Configuration & Customization
 
-- **Backend:** Django, OpenAI (GPT/Whisper), custom analyzer and models, included tools function with definitive schemas.
-- **Frontend:** HTML, JavaScript, WebRTC voice streaming.
-- **Data:** PostgreSQL. (deployment ready)
+- **Environment Setup:**  
+  Use the `.env_example.txt` as a template for your secret keys, database settings, and email credentials. Make sure your real `.env` is never shared publicly!
 
----
+- **Behavior & Personality:**  
+  The assistant’s tone, product knowledge, and logic live in `system_instructions.md`. Edit this file to adapt the voice assistant for different products, brands, behaviors, or languages without changing any Python code.
 
-## System Instructions
-
-Your assistant’s behavior is governed by the `system_instructions.md` file in the project root.  
-**To customize how the agent behaves** (i.e., its personality, product knowledge, and sales logic), simply edit this Markdown file to match your use case.  
-For example, update:
-- Brand persona, tone, and allowed responses.
-- Product lineup, frequently asked questions, etc.
-
-This enables you to easily adapt the AI's personality or usage (e.g., use it for another brand, support other languages, etc.), without needing to change the code.
+- **Email & Background Tasks:**  
+  The assistant can email conversation summaries and reports using your SMTP settings.
 
 ---
 
-## File Overview
+## API Endpoints
 
-- `assistant/analyzer.py`: Extracts user info, intent, and preferences for smarter replies.
-- `assistant/views.py`: Handles API and user interaction logic.
-- `assistant/models.py`: Defines storage for conversations and related data.
-- `assistant/urls.py`: API routing.
-- `constants.py`: Loads system instructions, config, and OpenAI settings.
-- `static/`: Frontend files (HTML, JS, CSS for the voice interface).
-- `system_instructions.md`: Edit this as described above for your scenario. Follows the rules of prompt engineering
+- `POST /api/session` : Start a new chat session (creates an OpenAI session).
+- `POST /api/conversation` : Add and receive chat messages.
+- `POST /api/analysis` : Extract analytics and insights from a chat session.
 
 ---
 
-## Key Endpoints
+## Backend Highlights
 
-- `POST /api/session` : Start a new chat session. Creates a new openAI session.
-- `POST /api/conversation` : Add a chat message. Our actual conversation
-- `POST /api/analysis` : Extract intelligence from the session. Analysis done using openAI
+- **Django App:** Handles chat, user context, analytics, and integrations.
+- **OpenAI Integration:** Live interaction with OpenAI's GPT and Whisper APIs.
+- **PostgreSQL Database:** Secure storage for sessions and conversation data.
+- **Celery Tasks:** Schedules summarization and email delivery in the background.
+- **Celery Beat Scheduler:** Would run every 20 seconds to schedule my email. Provide 1 email per-conversation
+- **Easily Extended:** Add tools, analysis logic, or API capabilities to the project by expanding the `assistant/` module.
+
+---
+
+## Frontend Highlights
+
+- **Browser Voice Chat:** Real-time voice interface using JavaScript, HTML, CSS, and WebRTC.
+- **Easy to Use:** Simple, modern interface to engage with the AI assistant—no plugins required.
+
+---
+
+## Customizing System Instructions
+
+- Update `system_instructions.md` to adjust personality, conversation rules, FAQ lists, product details, or any brand requirements.
+- This file is all you need to edit to repurpose the AI for a new domain or language!
 
 ---
 
 ## Troubleshooting
 
-- Check `.env` content, and OpenAI key.
-- Check Django logs for errors.
-- All business behavior is controlled by `system_instructions.md`—edit this file to fit your application.
+- Double-check your `.env` for correct OpenAI, DB, and email settings.
+- Inspect Django and Celery logs for error details.
+- If the assistant's replies are not as expected, review and adjust `system_instructions.md`.
+- For frontend issues, use browser dev tools (console/network).
 
 ---
 
 ## Credits
 
-Built by Techjays Intern Projects Team using Django and OpenAI.
+Built by the Techjays Intern Projects Team using Django and OpenAI.
 Mahindra branding is for demonstration and learning only.
 
 ---
