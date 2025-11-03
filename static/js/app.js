@@ -225,6 +225,44 @@
       return { status: 'unknown_function' };
     }
 
+    // -------------- Introductory Message --------------
+    function sendIntroductoryMessage(dataChannel) {
+      if (!dataChannel || dataChannel.readyState !== 'open') {
+        warn('Data channel not ready for intro message');
+        return;
+      }
+      
+      try {
+        // Send a conversation item event to trigger assistant response
+        const introEvent = {
+          type: 'conversation.item.create',
+          item: {
+            type: 'message',
+            role: 'user',
+            content: [
+              {
+                type: 'input_text',
+                text: 'Hello! Please introduce yourself.'
+              }
+            ]
+          }
+        };
+        
+        // Send the intro trigger
+        dataChannel.send(JSON.stringify(introEvent));
+        
+        // Trigger the response
+        const responseEvent = {
+          type: 'response.create'
+        };
+        dataChannel.send(JSON.stringify(responseEvent));
+        
+        log('Introductory message triggered');
+      } catch (error) {
+        err('Failed to send introductory message:', error);
+      }
+    }
+
     // -------------- Data Channel Messaging --------------
     async function handleDataChannelMessage(rawMsg) {
       const msg = (typeof rawMsg === 'string') ? safeJson(rawMsg) : rawMsg;
@@ -348,6 +386,9 @@
           log('Data channel opened - consultation ready');
           updateStatus('Connected! How can I help you today?', 'success');
           stopBtn.disabled = false;
+          
+          // Send introductory greeting message
+          sendIntroductoryMessage(dc);
         });
         dc.addEventListener('message', (evt) => {
           try { handleDataChannelMessage(evt.data); } catch (e) {
