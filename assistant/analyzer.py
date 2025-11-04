@@ -53,13 +53,12 @@ def _call_openai(
     return None
 
 def _user_texts(conv: Conversation) -> List[str]:
-    """Extract user-role message content from Conversation."""
+    #------- Extract user messages from conversation --------
     return [m.get("content") for m in (conv.messages_json or []) if m.get("role") == "user" and m.get("content")]
 
 @shared_task
 def generate_summary_task(session_id: str):
     summary_data = generate_conversation_summary(session_id)
-    # summary_text is unused; can be re-added for logging if needed
     return summary_data
 
 def analyze_conversation(session_id: str) -> Dict[str, Any]:
@@ -155,7 +154,7 @@ def save_message(session_id: str, role: str, content: str, user_id: Optional[int
     conv.total_messages = len(msgs)
     conv.save(update_fields=["messages_json", "total_messages"])
 
-    # Only analyze at every Nth message
+    # Only analyze at every 3th message
     if conv.total_messages % ANALYSIS_MESSAGE_BATCH_SIZE == 0:
         logger.info(f"Analysis triggered for session {session_id}: {conv.total_messages} messages so far.")
         analysis = analyze_conversation(session_id)
