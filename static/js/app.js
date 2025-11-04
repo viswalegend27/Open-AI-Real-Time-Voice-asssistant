@@ -227,13 +227,15 @@
 
     // -------------- Introductory Message --------------
     function sendIntroductoryMessage(dataChannel) {
-      if (!dataChannel || dataChannel.readyState !== 'open') {
-        warn('Data channel not ready for intro message');
+      if (!dataChannel) {
+        warn('sendIntroductoryMessage: No data channel instance provided');
         return;
       }
-      
+      if (dataChannel.readyState !== 'open') {
+        warn('sendIntroductoryMessage: Data channel not ready (state:', dataChannel.readyState, ')');
+        return;
+      }
       try {
-        // Send a conversation item event to trigger assistant response
         const introEvent = {
           type: 'conversation.item.create',
           item: {
@@ -247,19 +249,16 @@
             ]
           }
         };
-        
-        // Send the intro trigger
+    
         dataChannel.send(JSON.stringify(introEvent));
-        
-        // Trigger the response
-        const responseEvent = {
-          type: 'response.create'
-        };
+    
+        // Only send a response event if backend needs both for a response
+        const responseEvent = { type: 'response.create' };
         dataChannel.send(JSON.stringify(responseEvent));
-        
-        log('Introductory message triggered');
+    
+        log('Introductory message SENT successfully');
       } catch (error) {
-        err('Failed to send introductory message:', error);
+        err('sendIntroductoryMessage: Failed to send introductory message:', error);
       }
     }
 
