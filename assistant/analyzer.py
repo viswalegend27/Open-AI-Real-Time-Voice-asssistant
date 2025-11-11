@@ -12,7 +12,7 @@ from assistant.tools import conversation_summary_schema, conversation_analysis_s
 
 logger = logging.getLogger(__name__)
 MESSAGE_COOLDOWN_SECONDS = 5  
-ANALYSIS_MESSAGE_BATCH_SIZE = 3  
+ANALYSIS_MESSAGE_BATCH_SIZE = 4  
 load_dotenv()
 
 try:
@@ -58,8 +58,7 @@ def _user_texts(conv: Conversation) -> List[str]:
 
 @shared_task
 def generate_summary_task(session_id: str):
-    summary_data = generate_conversation_summary(session_id)
-    return summary_data
+    return generate_conversation_summary(session_id)
 
 def analyze_conversation(session_id: str) -> Dict[str, Any]:
     try:
@@ -74,8 +73,8 @@ def analyze_conversation(session_id: str) -> Dict[str, Any]:
     all_text = "\n".join(f"Customer: {t}" for t in texts)
     messages = [
         {"role": "system",
-         "content": ("You are a Mahindra car sales assistant AI. Extract user needs according to the schema. "
-                     "Return only a valid JSON object as your output.")},
+        "content": ("You are a Mahindra car sales assistant AI. Extract user needs according to the schema. "
+                    "Return only a valid JSON object as your output.")},
         {"role": "user", "content": all_text},
     ]
     extracted = _call_openai(messages, functions=[conversation_analysis_schema], function_name="analyze_customer_preferences") or {}
@@ -85,35 +84,37 @@ def analyze_conversation(session_id: str) -> Dict[str, Any]:
             now = timezone.now()
             # Save simple preferences
             for key in ("budget", "usage"):
-                val = extracted.get(key)
-                if val:
+                if val := extracted.get(key):
                     UserPreference.objects.update_or_create(
                         conversation=conv,
                         data__type=key,
                         defaults={"data": {"type": key, "value": str(val), "confidence": 0.8},
-                                  "extracted_at": now}
+                                "extracted_at": now}
                     )
-            # Priority features
-            pf = extracted.get("priority_features")
-            if pf:
+            if pf := extracted.get("priority_features"):
                 UserPreference.objects.update_or_create(
                     conversation=conv,
                     data__type="priority_features",
                     defaults={"data": {"type": "priority_features", "value": json.dumps(pf), "confidence": 0.7},
-                              "extracted_at": now}
+                            "extracted_at": now}
                 )
-            # Vehicle interests
-            vehicles = [v for v in (extracted.get("vehicle_interest") or []) if v]
-            if vehicles:
+            if vehicles := [
+                v for v in (extracted.get("vehicle_interest") or []) if v
+            ]:
                 existing = set(
                     VehicleInterest.objects.filter(conversation=conv, vehicle_name__in=vehicles)
                     .values_list("vehicle_name", flat=True)
                 )
-                to_create = [
-                    VehicleInterest(conversation=conv, vehicle_name=v, meta={"interest_level": 8}, timestamp=now)
-                    for v in vehicles if v not in existing
-                ]
-                if to_create:
+                if to_create := [
+                    VehicleInterest(
+                        conversation=conv,
+                        vehicle_name=v,
+                        meta={"interest_level": 8},
+                        timestamp=now,
+                    )
+                    for v in vehicles
+                    if v not in existing
+                ]:
                     VehicleInterest.objects.bulk_create(to_create)
                 VehicleInterest.objects.filter(conversation=conv, vehicle_name__in=vehicles).update(
                     meta={"interest_level": 8}, timestamp=now
@@ -132,13 +133,12 @@ def save_message(session_id: str, role: str, content: str, user_id: Optional[int
     # Rate limit: Only allow one message per session every MESSAGE_COOLDOWN_SECONDS
     if msgs:
         last_msg = msgs[-1]
-        last_time = last_msg.get("timestamp")
-        if last_time:
+        if last_time := last_msg.get("timestamp"):
             try:
                 last_time_dt = datetime.fromisoformat(last_time)
                 if timezone.is_naive(last_time_dt):
                     last_time_dt = timezone.make_aware(last_time_dt, timezone.get_current_timezone())
-                aware_now = now if not timezone.is_naive(now) else timezone.make_aware(now, timezone.get_current_timezone())
+                aware_now = timezone.make_aware(now, timezone.get_current_timezone()) if timezone.is_naive(now) else now
             except Exception:
                 last_time_dt = now
                 aware_now = now
@@ -209,22 +209,6 @@ def save_message_batch(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
                 conv.total_messages = len(msgs)
                 conv.save(update_fields=["messages_json", "total_messages"])
                 
-                # Check if we should analyze
-                should_analyze = conv.total_messages % ANALYSIS_MESSAGE_BATCH_SIZE == 0
-                
-                results[session_id] = {
-                    "saved": len(session_messages),
-                    "total_messages": conv.total_messages,
-                    "analyzed": should_analyze
-                }
-                
-                # Run analysis if needed
-                if should_analyze:
-                    logger.info(f"Analysis triggered for session {session_id} after batch: {conv.total_messages} messages")
-                    try:
-                        analyze_conversation(session_id)
-                    except Exception as e:
-                        logger.error(f"Analysis failed for {session_id}: {e}")
                         
         except Exception as e:
             logger.error(f"Failed to save batch for session {session_id}: {e}")
