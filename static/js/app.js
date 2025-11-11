@@ -26,6 +26,8 @@
       summaryInProgress: false,
       summaryCallId: null,
       pendingRaf: null,
+      messageQueue: [],
+      flushTimer: null,
     };
 
     // -------------- Utility Helpers --------------
@@ -139,37 +141,80 @@
         state.committedTranscript = (state.committedTranscript ? `${state.committedTranscript}\n` : '') + lineToAppend;
         setElementText(aiTranscriptEl, `${state.committedTranscript.trim()}\n`);
       }
-      saveMessageToDatabase('assistant', lineToAppend).catch(e => warn('saveMessage failed', e));
+      // Queing message for saving.
+      queueMessageForSave('assistant', lineToAppend);
       state.streamingLine = '';
       state.currentAIResponse = '';
       state.isStreaming = false;
     }
-    const MESSAGE_COOLDOWN = 5000; // 2 seconds
-    const lastMessageTimestamps = {};
-    // -------------- DB Save (User + Assistant) --------------
-    async function saveMessageToDatabase(role, content) {
+    // -------------- Message Batching Configuration --------------
+    const BATCH_SIZE = 8; // Send messages after every 8 messages (4 exchanges)
+    const FLUSH_INTERVAL = 15000; // Also flush every 15 seconds as backup
+
+    // -------------- DB Save (User + Assistant) with Batching --------------
+    function queueMessageForSave(role, content) {
       if (!state.sessionId || !content) return;
-      const now = Date.now();
-      const key = state.sessionId + '-' + role;
-      if (lastMessageTimestamps[key] && now - lastMessageTimestamps[key] < MESSAGE_COOLDOWN) {
-        // Too soon! Prevent another call, optionally show a warning or just silently drop.
-        warn('Too soon since last message, skipping save.');
-        updateStatus('Please wait a moment before sending another message.', 'warning');
-        return;
+      
+      // Add message to queue
+      state.messageQueue.push({
+        session_id: state.sessionId,
+        role: role,
+        content: content,
+        timestamp: new Date().toISOString()
+      });
+      
+      log(`Queued ${role} message (${state.messageQueue.length}/${BATCH_SIZE})`);
+      
+      // Check if we should flush
+      if (state.messageQueue.length >= BATCH_SIZE) {
+        flushMessageQueue();
+      } else {
+        // Reset the flush timer
+        scheduleFlush();
       }
-      lastMessageTimestamps[key] = now;
+    }
+
+    function scheduleFlush() {
+      if (state.flushTimer) {
+        clearTimeout(state.flushTimer);
+      }
+      state.flushTimer = setTimeout(() => {
+        if (state.messageQueue.length > 0) {
+          log('Auto-flushing message queue after timeout');
+          flushMessageQueue();
+        }
+      }, FLUSH_INTERVAL);
+    }
+
+    async function flushMessageQueue() {
+      if (state.messageQueue.length === 0) return;
+      
+      // Clear the timer
+      if (state.flushTimer) {
+        clearTimeout(state.flushTimer);
+        state.flushTimer = null;
+      }
+      
+      // Take all queued messages
+      const messagesToSend = [...state.messageQueue];
+      state.messageQueue = [];
+      
+      log(`Flushing ${messagesToSend.length} messages to backend`);
+      
       try {
-        await fetch('/api/conversation', {
+        await fetch('/api/conversation/batch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: state.sessionId, role, content })
+          body: JSON.stringify({ messages: messagesToSend })
         }).then(res => {
           if (!res.ok) return res.text().then(t => { throw new Error(t || res.status); });
-          log(`Saved ${role}`);
+          log(`Saved batch of ${messagesToSend.length} messages`);
         });
       } catch (e) {
-        err('Failed to save message:', e);
-        updateStatus('Unable to save conversation message. Please check your connection.', 'error');
+        err('Failed to save message batch:', e);
+        // Re-queue messages on failure
+        state.messageQueue.unshift(...messagesToSend);
+        updateStatus('Unable to save conversation messages. Will retry...', 'warning');
       }
     }
     // -------------- My Toast functionality --------------    
@@ -272,7 +317,7 @@
       if (type === 'conversation.item.input_audio_transcription.completed') {
         const transcript = msg.transcript || '';
         updateUserTranscript(`You: ${transcript}`);
-        saveMessageToDatabase('user', transcript).catch(e => warn('save user failed', e));
+        queueMessageForSave('user', transcript);
         return;
       }
       // Handle function call events from assistant
@@ -443,6 +488,18 @@
     }
     // our conversation stop and cleanup
     function stopConversation(isAuto = false) {
+      // Flush any pending messages before stopping
+      if (state.messageQueue.length > 0) {
+        log('Flushing remaining messages before stopping conversation');
+        flushMessageQueue();
+      }
+      
+      // Clear flush timer
+      if (state.flushTimer) {
+        clearTimeout(state.flushTimer);
+        state.flushTimer = null;
+      }
+      
       if (state.dataChannel) {
         try { state.dataChannel.close(); } catch (e) {}
         state.dataChannel = null;

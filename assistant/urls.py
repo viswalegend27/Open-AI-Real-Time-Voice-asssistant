@@ -5,6 +5,7 @@ urlpatterns = [
     path('', views.read_root),
     path('api/session', views.create_realtime_session, name='create_realtime_session'),
     path('api/conversation', views.save_conversation, name='save_conversation'),
+    path('api/conversation/batch', views.save_conversation_batch, name='save_conversation_batch'),
     path('api/generate-summary', views.generate_summary, name='generate_summary'),
     path('api/summary/<str:session_id>/', views.get_summary , name='get_summary'), 
     path('api/vehicle-interests/', views.list_vehicle_interests, name='list_vehicle_interests'),

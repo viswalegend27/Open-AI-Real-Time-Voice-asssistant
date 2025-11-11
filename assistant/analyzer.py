@@ -163,6 +163,79 @@ def save_message(session_id: str, role: str, content: str, user_id: Optional[int
 
     return {"status": "success", "message_count": conv.total_messages, "analysis": analysis}
 
+# -- Saving messages as batch to avoid recurring calls.
+def save_message_batch(messages: List[Dict[str, Any]]) -> Dict[str, Any]:
+    if not messages:
+        return {"status": "error", "message": "No messages to save"}
+    
+    # Group messages by session_id
+    sessions = {}
+    for msg in messages:
+        session_id = msg.get("session_id")
+        if not session_id:
+            continue
+        if session_id not in sessions:
+            sessions[session_id] = []
+        sessions[session_id].append(msg)
+    
+    results = {}
+    total_saved = 0
+    
+    for session_id, session_messages in sessions.items():
+        try:
+            with transaction.atomic():
+                conv, _ = Conversation.objects.get_or_create(
+                    session_id=session_id,
+                    defaults={"user_id": None}
+                )
+                
+                msgs = list(conv.messages_json or [])
+                
+                # Add all messages from this batch
+                for msg in session_messages:
+                    role = msg.get("role")
+                    content = msg.get("content")
+                    timestamp = msg.get("timestamp", timezone.now().isoformat())
+                    
+                    if role and content:
+                        msgs.append({
+                            "role": role,
+                            "content": content,
+                            "timestamp": timestamp
+                        })
+                        total_saved += 1
+                
+                conv.messages_json = msgs
+                conv.total_messages = len(msgs)
+                conv.save(update_fields=["messages_json", "total_messages"])
+                
+                # Check if we should analyze
+                should_analyze = conv.total_messages % ANALYSIS_MESSAGE_BATCH_SIZE == 0
+                
+                results[session_id] = {
+                    "saved": len(session_messages),
+                    "total_messages": conv.total_messages,
+                    "analyzed": should_analyze
+                }
+                
+                # Run analysis if needed
+                if should_analyze:
+                    logger.info(f"Analysis triggered for session {session_id} after batch: {conv.total_messages} messages")
+                    try:
+                        analyze_conversation(session_id)
+                    except Exception as e:
+                        logger.error(f"Analysis failed for {session_id}: {e}")
+                        
+        except Exception as e:
+            logger.error(f"Failed to save batch for session {session_id}: {e}")
+            results[session_id] = {"error": str(e)}
+    
+    return {
+        "status": "success",
+        "total_saved": total_saved,
+        "sessions": results
+    }
+
 def generate_conversation_summary(session_id: str) -> Dict[str, Any]:
     try:
         conv = Conversation.objects.get(session_id=session_id)

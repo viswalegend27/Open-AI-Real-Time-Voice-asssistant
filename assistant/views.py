@@ -103,6 +103,23 @@ def save_conversation(request: HttpRequest) -> JsonResponse:
         logger.exception("save_conversation error")
         return _json_error(str(e), 500)
 
+# -- Saving message as a batch. 
+@csrf_exempt
+def save_conversation_batch(request: HttpRequest) -> JsonResponse:
+    data = _parse_body(request)
+    messages = data.get("messages", [])
+    
+    if not messages or not isinstance(messages, list):
+        return _json_error("Missing or invalid 'messages' array", 400)
+    
+    try:
+        from assistant.analyzer import save_message_batch
+        result = save_message_batch(messages)
+        return _json_response(result)
+    except Exception as e:
+        logger.exception("save_conversation_batch error")
+        return _json_error(str(e), 500)
+
 @csrf_exempt
 def get_analysis(request: HttpRequest) -> JsonResponse:
     session_id = _get_session_id(request)
